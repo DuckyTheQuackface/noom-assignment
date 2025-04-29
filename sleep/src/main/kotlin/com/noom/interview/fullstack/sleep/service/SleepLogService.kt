@@ -12,9 +12,6 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.LocalDate
 import java.time.LocalTime
-import java.time.OffsetDateTime
-import java.time.ZoneId
-import java.time.ZonedDateTime
 import java.time.temporal.ChronoUnit
 
 @Service
@@ -29,21 +26,18 @@ class SleepLogService(
         val user = userRepository.findById(userId)
             .orElseThrow { ResourceNotFoundException("User not found with id: $userId") }
 
-        // Extract the date in the user's time zone from the timeToBed
-        val sleepDate = request.timeToBed.toLocalDate()
-
-        // Format timeToBed and timeOutOfBed with the user's time zone
-        val zonedTimeToBad: ZonedDateTime = request.timeToBed.atZone(ZoneId.of(user.timeZone))
-        val offsetTimeToBad = zonedTimeToBad.toOffsetDateTime()
-        val zonedTimeOutOfBad = request.timeOutOfBed.atZone(ZoneId.of(user.timeZone))
-        val offsetTimeOutOfBad = zonedTimeOutOfBad.toOffsetDateTime()
+        // Calculate total time in bed
+        val totalTimeInBed = calculateTotalTimeInBed(
+            request.timeToBed,
+            request.timeOutOfBed
+        )
 
         val sleepLog = SleepLog(
             user = user,
-            sleepDate = sleepDate,
-            timeToBed = offsetTimeToBad,
-            timeOutOfBed = offsetTimeOutOfBad,
-            totalTimeInBed = 0, // TODO: Calculated
+            sleepDate = request.sleepDate,
+            localTimeToBed = request.timeToBed,
+            localTimeOutOfBed = request.timeOutOfBed,
+            totalTimeInBed = totalTimeInBed,
             feeling = request.feeling
         )
 
@@ -51,7 +45,7 @@ class SleepLogService(
         val savedSleepLog = sleepLogRepository.save(sleepLog)
 
         // Convert to DTO and return
-        return sleepLogMapper.toDto(savedSleepLog, ZoneId.of(user.timeZone))
+        return sleepLogMapper.toDto(savedSleepLog)
     }
 
     @Transactional(readOnly = true)
@@ -62,14 +56,13 @@ class SleepLogService(
         val latestSleepLog = sleepLogRepository.findFirstByUserIdOrderBySleepDateDesc(userId)
             .orElseThrow { ResourceNotFoundException("No sleep logs found for user with id: $userId") }
 
-        return sleepLogMapper.toDto(latestSleepLog, ZoneId.of(user.timeZone))
+        return sleepLogMapper.toDto(latestSleepLog)
     }
 
     @Transactional(readOnly = true)
     fun getSleepStats(userId: Long): SleepStatsResponse {
         val user = userRepository.findById(userId)
             .orElseThrow { ResourceNotFoundException("User not found with id: $userId") }
-        val zone = ZoneId.of(user.timeZone)
 
         // Calculate date range (last 30 days)
         val today = LocalDate.now()
@@ -92,14 +85,10 @@ class SleepLogService(
 
         // Calculate average bed time and wake time
         val avgBedTime = calculateAverageLocalTime(
-            sleepLogs.map {
-                it.timeToBed.atZoneSameInstant(zone).toLocalTime()
-            }
+            sleepLogs.map { it.localTimeToBed }
         )
         val avgWakeTime = calculateAverageLocalTime(
-            sleepLogs.map {
-                it.timeOutOfBed.atZoneSameInstant(zone).toLocalTime()
-            }
+            sleepLogs.map { it.localTimeOutOfBed }
         )
 
         // Calculate feeling frequencies
@@ -117,8 +106,8 @@ class SleepLogService(
         )
     }
 
-    private fun calculateMinutesBetween(start: OffsetDateTime, end: OffsetDateTime): Int {
-        return ChronoUnit.MINUTES.between(start, end).toInt()
+    private fun calculateTotalTimeInBed(bedTime: LocalTime, wakeTime: LocalTime): Int {
+        return ChronoUnit.MINUTES.between(bedTime, wakeTime).toInt()
     }
 
     private fun calculateAverageLocalTime(times: List<LocalTime>): LocalTime {

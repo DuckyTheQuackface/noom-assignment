@@ -15,18 +15,14 @@ CREATE TABLE sleep_logs (
                             id SERIAL PRIMARY KEY,
                             user_id INTEGER NOT NULL REFERENCES users(id),
                             sleep_date DATE NOT NULL,
-                            time_to_bed TIMESTAMPTZ NOT NULL,
-                            time_out_of_bed TIMESTAMPTZ NOT NULL,
-                            total_time_in_bed INTEGER NOT NULL, -- Duration in minutes
+                            local_time_to_bed TIME NOT NULL,     -- User's local time
+                            local_time_out_of_bed TIME NOT NULL, -- User's local time
+                            total_time_in_bed INTEGER NOT NULL,  -- Duration in minutes
                             feeling morning_feeling NOT NULL,
-                            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-                            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                            created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+                            updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
 
-    -- Each user can only have one sleep log for a given date
-                            CONSTRAINT unique_user_sleep_date UNIQUE (user_id, sleep_date),
-
-    -- Ensure time_out_of_bed is after time_to_bed
-                            CONSTRAINT valid_sleep_interval CHECK (time_out_of_bed > time_to_bed)
+                            CONSTRAINT unique_user_sleep_date UNIQUE (user_id, sleep_date)
 );
 
 -- Create indexes for common queries
