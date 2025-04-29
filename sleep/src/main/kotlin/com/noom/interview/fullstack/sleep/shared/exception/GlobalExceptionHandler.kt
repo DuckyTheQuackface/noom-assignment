@@ -1,4 +1,4 @@
-package com.noom.interview.fullstack.sleep.configuration
+package com.noom.interview.fullstack.sleep.shared.exception
 
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.http.HttpStatus

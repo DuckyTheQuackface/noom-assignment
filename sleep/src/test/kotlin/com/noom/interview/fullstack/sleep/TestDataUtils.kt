@@ -1,11 +1,11 @@
 package com.noom.interview.fullstack.sleep
 
-import com.noom.interview.fullstack.sleep.db.entity.MorningFeeling
-import com.noom.interview.fullstack.sleep.db.entity.SleepLog
-import com.noom.interview.fullstack.sleep.db.entity.User
-import com.noom.interview.fullstack.sleep.db.repositorty.SleepLogRepository
-import com.noom.interview.fullstack.sleep.db.repositorty.UserRepository
-import com.noom.interview.fullstack.sleep.dto.CreateSleepLogRequest
+import com.noom.interview.fullstack.sleep.sleeplog.model.MorningFeeling
+import com.noom.interview.fullstack.sleep.sleeplog.model.SleepLog
+import com.noom.interview.fullstack.sleep.user.model.User
+import com.noom.interview.fullstack.sleep.sleeplog.dto.request.CreateSleepLogRequest
+import com.noom.interview.fullstack.sleep.sleeplog.repository.SleepLogRepository
+import com.noom.interview.fullstack.sleep.user.repository.UserRepository
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
@@ -85,7 +85,7 @@ class TestDataUtils {
                 utcTimeToBed = utcBedTime,
                 utcTimeOutOfBed = utcWakeTime,
                 timeZoneId = timeZoneId,
-                totalTimeInBed = minutes,
+                totalTimeInBedMinutes = minutes,
                 feeling = feeling
             )
         }

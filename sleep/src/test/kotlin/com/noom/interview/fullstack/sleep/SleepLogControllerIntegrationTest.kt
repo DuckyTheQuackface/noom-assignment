@@ -1,9 +1,9 @@
 package com.noom.interview.fullstack.sleep
 
-import com.noom.interview.fullstack.sleep.db.entity.MorningFeeling
-import com.noom.interview.fullstack.sleep.db.entity.User
-import com.noom.interview.fullstack.sleep.db.repositorty.SleepLogRepository
-import com.noom.interview.fullstack.sleep.db.repositorty.UserRepository
+import com.noom.interview.fullstack.sleep.sleeplog.model.MorningFeeling
+import com.noom.interview.fullstack.sleep.user.model.User
+import com.noom.interview.fullstack.sleep.sleeplog.repository.SleepLogRepository
+import com.noom.interview.fullstack.sleep.user.repository.UserRepository
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -58,7 +58,8 @@ class SleepLogControllerIntegrationTest : BaseIntegrationTest() {
 
         // When & Then
         mockMvc.perform(
-            post("/api/v1/users/${testUser.id}/sleep-logs")
+            post("/api/v1/sleep-logs")
+                .header("UserId", testUser.id)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request))
         )
@@ -67,9 +68,10 @@ class SleepLogControllerIntegrationTest : BaseIntegrationTest() {
             .andExpect(jsonPath("$.sleepDate").value(sleepDate.toString()))
             .andExpect(jsonPath("$.timeToBed").value(timeToBed.format(DateTimeFormatter.ofPattern("HH:mm:ss"))))
             .andExpect(jsonPath("$.timeOutOfBed").value(timeOutOfBed.format(DateTimeFormatter.ofPattern("HH:mm:ss"))))
-            .andExpect(jsonPath("$.totalTimeInBed").value(495)) // 8h15m = 495 minutes
+            .andExpect(jsonPath("$.totalTimeInBedMinutes").value(495))
             .andExpect(jsonPath("$.feeling").value("GOOD"))
     }
+
 
     @Test
     fun `should get latest sleep log`() {
@@ -88,7 +90,8 @@ class SleepLogControllerIntegrationTest : BaseIntegrationTest() {
 
         // When & Then
         mockMvc.perform(
-            get("/api/v1/users/${testUser.id}/sleep-logs/latest")
+            get("/api/v1/sleep-logs/latest")
+                .header("UserId", testUser.id)
         )
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.id").exists())
@@ -102,12 +105,13 @@ class SleepLogControllerIntegrationTest : BaseIntegrationTest() {
 
         // When & Then
         mockMvc.perform(
-            get("/api/v1/users/${testUser.id}/sleep-logs/stats")
+            get("/api/v1/sleep-logs/stats")
+                .header("UserId", testUser.id)
         )
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.startDate").exists())
             .andExpect(jsonPath("$.endDate").exists())
-            .andExpect(jsonPath("$.averageTimeInBed").exists())
+            .andExpect(jsonPath("$.averageTimeInBedMinutes").exists())
             .andExpect(jsonPath("$.averageBedTime").exists())
             .andExpect(jsonPath("$.averageWakeTime").exists())
             .andExpect(jsonPath("$.feelingFrequencies").exists())
@@ -124,7 +128,8 @@ class SleepLogControllerIntegrationTest : BaseIntegrationTest() {
 
         // When & Then
         mockMvc.perform(
-            post("/api/v1/users/$nonExistentUserId/sleep-logs")
+            post("/api/v1/sleep-logs")
+                .header("UserId", nonExistentUserId)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request))
         )
@@ -135,7 +140,8 @@ class SleepLogControllerIntegrationTest : BaseIntegrationTest() {
     fun `should return 404 when no sleep logs exist for latest`() {
         // When & Then
         mockMvc.perform(
-            get("/api/v1/users/${testUser.id}/sleep-logs/latest")
+            get("/api/v1/sleep-logs/latest")
+                .header("UserId", testUser.id)
         )
             .andExpect(status().isNotFound)
     }
@@ -144,7 +150,8 @@ class SleepLogControllerIntegrationTest : BaseIntegrationTest() {
     fun `should return 404 when no sleep logs exist for stats`() {
         // When & Then
         mockMvc.perform(
-            get("/api/v1/users/${testUser.id}/sleep-logs/stats")
+            get("/api/v1/sleep-logs/stats")
+                .header("UserId", testUser.id)
         )
             .andExpect(status().isNotFound)
     }
@@ -165,7 +172,8 @@ class SleepLogControllerIntegrationTest : BaseIntegrationTest() {
 
         // When & Then
         mockMvc.perform(
-            post("/api/v1/users/${testUser.id}/sleep-logs")
+            post("/api/v1/sleep-logs")
+                .header("UserId", testUser.id)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request))
         )

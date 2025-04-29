@@ -1,5 +1,6 @@
-package com.noom.interview.fullstack.sleep.db.entity
+package com.noom.interview.fullstack.sleep.sleeplog.model
 
+import com.noom.interview.fullstack.sleep.user.model.User
 import io.hypersistence.utils.hibernate.type.basic.PostgreSQLEnumType
 import org.hibernate.annotations.Type
 import org.hibernate.annotations.TypeDef
@@ -49,8 +50,8 @@ data class SleepLog(
     @Column(name = "time_zone_id", nullable = false)
     val timeZoneId: String,
 
-    @Column(name = "total_time_in_bed", nullable = false)
-    val totalTimeInBed: Int, // Duration in minutes
+    @Column(name = "total_time_in_bed_minutes", nullable = false)
+    val totalTimeInBedMinutes: Int,
 
     @Type(type = "pgsql_enum")
     @Enumerated(EnumType.STRING)

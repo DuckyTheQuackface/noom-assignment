@@ -1,13 +1,13 @@
-package com.noom.interview.fullstack.sleep.service
+package com.noom.interview.fullstack.sleep.sleeplog
 
-import com.noom.interview.fullstack.sleep.configuration.ResourceNotFoundException
-import com.noom.interview.fullstack.sleep.db.entity.SleepLog
-import com.noom.interview.fullstack.sleep.db.repositorty.SleepLogRepository
-import com.noom.interview.fullstack.sleep.db.repositorty.UserRepository
-import com.noom.interview.fullstack.sleep.dto.CreateSleepLogRequest
-import com.noom.interview.fullstack.sleep.dto.SleepLogResponse
-import com.noom.interview.fullstack.sleep.dto.SleepStatsResponse
-import com.noom.interview.fullstack.sleep.mapper.SleepLogMapper
+import com.noom.interview.fullstack.sleep.shared.exception.ResourceNotFoundException
+import com.noom.interview.fullstack.sleep.sleeplog.dto.request.CreateSleepLogRequest
+import com.noom.interview.fullstack.sleep.sleeplog.dto.response.SleepLogResponse
+import com.noom.interview.fullstack.sleep.sleeplog.dto.response.SleepStatsResponse
+import com.noom.interview.fullstack.sleep.sleeplog.mapper.SleepLogMapper
+import com.noom.interview.fullstack.sleep.sleeplog.model.SleepLog
+import com.noom.interview.fullstack.sleep.sleeplog.repository.SleepLogRepository
+import com.noom.interview.fullstack.sleep.user.UserService
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.LocalDate
@@ -19,14 +19,13 @@ import java.time.temporal.ChronoUnit
 @Service
 class SleepLogService(
     private val sleepLogRepository: SleepLogRepository,
-    private val userRepository: UserRepository,
+    private val userService: UserService,
     private val sleepLogMapper: SleepLogMapper
 ) {
 
     @Transactional
     fun createSleepLog(userId: Long, request: CreateSleepLogRequest): SleepLogResponse {
-        val user = userRepository.findById(userId)
-            .orElseThrow { ResourceNotFoundException("User not found with id: $userId") }
+        val user = userService.getUserById(userId)
 
         // Use the provided time zone or default to user's time zone
         val timeZoneId = request.timeZoneId ?: user.timeZone
@@ -56,7 +55,7 @@ class SleepLogService(
             utcTimeToBed = utcBedTime,
             utcTimeOutOfBed = utcWakeTime,
             timeZoneId = timeZoneId,
-            totalTimeInBed = totalTimeInBed,
+            totalTimeInBedMinutes = totalTimeInBed,
             feeling = request.feeling
         )
 
@@ -69,19 +68,17 @@ class SleepLogService(
 
     @Transactional(readOnly = true)
     fun getLatestSleepLog(userId: Long): SleepLogResponse {
-        val user = userRepository.findById(userId)
-            .orElseThrow { ResourceNotFoundException("User not found with id: $userId") }
+        val user = userService.getUserById(userId)
 
         val latestSleepLog = sleepLogRepository.findFirstByUserIdOrderBySleepDateDesc(userId)
-            .orElseThrow { ResourceNotFoundException("No sleep logs found for user with id: $userId") }
+            ?: throw ResourceNotFoundException("No sleep logs found for user with id: $userId")
 
         return sleepLogMapper.toDto(latestSleepLog)
     }
 
     @Transactional(readOnly = true)
     fun getSleepStats(userId: Long): SleepStatsResponse {
-        val user = userRepository.findById(userId)
-            .orElseThrow { ResourceNotFoundException("User not found with id: $userId") }
+        val user = userService.getUserById(userId)
 
         // Calculate date range (last 30 days)
         val today = LocalDate.now()
@@ -98,7 +95,7 @@ class SleepLogService(
 
         // Calculate average time in bed
         val avgTimeInBed = sleepLogs
-            .map { it.totalTimeInBed }
+            .map { it.totalTimeInBedMinutes }
             .average()
             .toInt()
 
@@ -118,7 +115,7 @@ class SleepLogService(
         return SleepStatsResponse(
             startDate = thirtyDaysAgo,
             endDate = today,
-            averageTimeInBed = avgTimeInBed,
+            averageTimeInBedMinutes = avgTimeInBed,
             averageBedTime = avgBedTime,
             averageWakeTime = avgWakeTime,
             feelingFrequencies = feelingFrequencies
