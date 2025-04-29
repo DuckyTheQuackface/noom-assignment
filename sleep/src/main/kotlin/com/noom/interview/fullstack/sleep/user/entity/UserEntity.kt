@@ -1,4 +1,4 @@
-package com.noom.interview.fullstack.sleep.user.model
+package com.noom.interview.fullstack.sleep.user.entity
 
 import java.time.Instant
 import javax.persistence.Column
@@ -9,8 +9,8 @@ import javax.persistence.Id
 import javax.persistence.Table
 
 @Entity
-@Table(name = "users")
-data class User(
+@Table(name = "\"user\"")
+data class UserEntity(
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     var id: Long = 0,

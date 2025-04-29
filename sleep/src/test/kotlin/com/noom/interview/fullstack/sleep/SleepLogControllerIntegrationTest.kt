@@ -1,7 +1,7 @@
 package com.noom.interview.fullstack.sleep
 
-import com.noom.interview.fullstack.sleep.sleeplog.model.MorningFeeling
-import com.noom.interview.fullstack.sleep.user.model.User
+import com.noom.interview.fullstack.sleep.sleeplog.entity.MorningFeeling
+import com.noom.interview.fullstack.sleep.user.entity.UserEntity
 import com.noom.interview.fullstack.sleep.sleeplog.repository.SleepLogRepository
 import com.noom.interview.fullstack.sleep.user.repository.UserRepository
 import org.junit.jupiter.api.AfterEach
@@ -25,7 +25,7 @@ class SleepLogControllerIntegrationTest : BaseIntegrationTest() {
     @Autowired
     private lateinit var sleepLogRepository: SleepLogRepository
 
-    private lateinit var testUser: User
+    private lateinit var testUserEntity: UserEntity
 
     @BeforeEach
     fun setup() {
@@ -34,7 +34,7 @@ class SleepLogControllerIntegrationTest : BaseIntegrationTest() {
         userRepository.deleteAll()
 
         // Create a test user
-        testUser = userRepository.save(TestDataUtils.createTestUser())
+        testUserEntity = userRepository.save(TestDataUtils.createTestUser())
     }
 
     @AfterEach
@@ -59,7 +59,7 @@ class SleepLogControllerIntegrationTest : BaseIntegrationTest() {
         // When & Then
         mockMvc.perform(
             post("/api/v1/sleep-logs")
-                .header("UserId", testUser.id)
+                .header("UserId", testUserEntity.id)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request))
         )
@@ -77,11 +77,11 @@ class SleepLogControllerIntegrationTest : BaseIntegrationTest() {
     fun `should get latest sleep log`() {
         // Given
         val sleepLog1 = TestDataUtils.createSleepLog(
-            user = testUser,
+            userEntity = testUserEntity,
             sleepDate = LocalDate.now().minusDays(2)
         )
         val sleepLog2 = TestDataUtils.createSleepLog(
-            user = testUser,
+            userEntity = testUserEntity,
             sleepDate = LocalDate.now().minusDays(1)
         )
 
@@ -91,7 +91,7 @@ class SleepLogControllerIntegrationTest : BaseIntegrationTest() {
         // When & Then
         mockMvc.perform(
             get("/api/v1/sleep-logs/latest")
-                .header("UserId", testUser.id)
+                .header("UserId", testUserEntity.id)
         )
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.id").exists())
@@ -106,7 +106,7 @@ class SleepLogControllerIntegrationTest : BaseIntegrationTest() {
         // When & Then
         mockMvc.perform(
             get("/api/v1/sleep-logs/stats")
-                .header("UserId", testUser.id)
+                .header("UserId", testUserEntity.id)
         )
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.startDate").exists())
@@ -141,7 +141,7 @@ class SleepLogControllerIntegrationTest : BaseIntegrationTest() {
         // When & Then
         mockMvc.perform(
             get("/api/v1/sleep-logs/latest")
-                .header("UserId", testUser.id)
+                .header("UserId", testUserEntity.id)
         )
             .andExpect(status().isNotFound)
     }
@@ -151,7 +151,7 @@ class SleepLogControllerIntegrationTest : BaseIntegrationTest() {
         // When & Then
         mockMvc.perform(
             get("/api/v1/sleep-logs/stats")
-                .header("UserId", testUser.id)
+                .header("UserId", testUserEntity.id)
         )
             .andExpect(status().isNotFound)
     }
@@ -173,7 +173,7 @@ class SleepLogControllerIntegrationTest : BaseIntegrationTest() {
         // When & Then
         mockMvc.perform(
             post("/api/v1/sleep-logs")
-                .header("UserId", testUser.id)
+                .header("UserId", testUserEntity.id)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request))
         )

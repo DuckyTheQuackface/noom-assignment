@@ -5,7 +5,7 @@ import com.noom.interview.fullstack.sleep.sleeplog.dto.request.CreateSleepLogReq
 import com.noom.interview.fullstack.sleep.sleeplog.dto.response.SleepLogResponse
 import com.noom.interview.fullstack.sleep.sleeplog.dto.response.SleepStatsResponse
 import com.noom.interview.fullstack.sleep.sleeplog.mapper.SleepLogMapper
-import com.noom.interview.fullstack.sleep.sleeplog.model.SleepLog
+import com.noom.interview.fullstack.sleep.sleeplog.entity.SleepLogEntity
 import com.noom.interview.fullstack.sleep.sleeplog.repository.SleepLogRepository
 import com.noom.interview.fullstack.sleep.user.UserService
 import org.springframework.stereotype.Service
@@ -47,7 +47,7 @@ class SleepLogService(
         val wakeDateTime = ZonedDateTime.of(wakeUpDate, request.timeOutOfBed, zoneId)
         val utcWakeTime = wakeDateTime.toOffsetDateTime()
 
-        val sleepLog = SleepLog(
+        val sleepLogEntity = SleepLogEntity(
             user = user,
             sleepDate = request.sleepDate,
             localTimeToBed = request.timeToBed,
@@ -60,7 +60,7 @@ class SleepLogService(
         )
 
         // Save to database
-        val savedSleepLog = sleepLogRepository.save(sleepLog)
+        val savedSleepLog = sleepLogRepository.save(sleepLogEntity)
 
         // Convert to DTO and return
         return sleepLogMapper.toDto(savedSleepLog)

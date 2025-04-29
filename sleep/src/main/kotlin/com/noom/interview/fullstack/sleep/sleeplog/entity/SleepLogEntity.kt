@@ -1,6 +1,6 @@
-package com.noom.interview.fullstack.sleep.sleeplog.model
+package com.noom.interview.fullstack.sleep.sleeplog.entity
 
-import com.noom.interview.fullstack.sleep.user.model.User
+import com.noom.interview.fullstack.sleep.user.entity.UserEntity
 import io.hypersistence.utils.hibernate.type.basic.PostgreSQLEnumType
 import org.hibernate.annotations.Type
 import org.hibernate.annotations.TypeDef
@@ -21,16 +21,16 @@ import javax.persistence.ManyToOne
 import javax.persistence.Table
 
 @Entity
-@Table(name = "sleep_logs")
+@Table(name = "sleep_log")
 @TypeDef(name = "pgsql_enum", typeClass = PostgreSQLEnumType::class)
-data class SleepLog(
+data class SleepLogEntity(
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     val id: Long = 0,
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
-    val user: User,
+    val user: UserEntity,
 
     @Column(name = "sleep_date", nullable = false)
     val sleepDate: LocalDate,

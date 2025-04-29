@@ -1,6 +1,6 @@
 package com.noom.interview.fullstack.sleep.sleeplog.dto.response
 
-import com.noom.interview.fullstack.sleep.sleeplog.model.MorningFeeling
+import com.noom.interview.fullstack.sleep.sleeplog.entity.MorningFeeling
 import java.time.LocalDate
 import java.time.LocalTime
 

@@ -1,4 +1,4 @@
-CREATE TABLE users (
+CREATE TABLE "user" (
     id SERIAL PRIMARY KEY,
     username VARCHAR(100) NOT NULL UNIQUE,
     time_zone VARCHAR(100) NOT NULL,
@@ -8,9 +8,9 @@ CREATE TABLE users (
 
 CREATE TYPE morning_feeling AS ENUM ('BAD', 'OK', 'GOOD');
 
-CREATE TABLE sleep_logs (
+CREATE TABLE sleep_log (
     id SERIAL PRIMARY KEY,
-    user_id INTEGER NOT NULL REFERENCES users(id),
+    user_id INTEGER NOT NULL REFERENCES "user"(id),
     sleep_date DATE NOT NULL,
     local_time_to_bed TIME NOT NULL,
     local_time_out_of_bed TIME NOT NULL,
@@ -26,6 +26,6 @@ CREATE TABLE sleep_logs (
     CONSTRAINT valid_utc_sleep_interval CHECK (utc_time_out_of_bed > utc_time_to_bed)
 );
 
-CREATE INDEX idx_sleep_logs_user_id ON sleep_logs(user_id);
-CREATE INDEX idx_sleep_logs_sleep_date ON sleep_logs(sleep_date);
-CREATE INDEX idx_sleep_logs_user_date ON sleep_logs(user_id, sleep_date DESC);
+CREATE INDEX idx_sleep_logs_user_id ON sleep_log(user_id);
+CREATE INDEX idx_sleep_logs_sleep_date ON sleep_log(sleep_date);
+CREATE INDEX idx_sleep_logs_user_date ON sleep_log(user_id, sleep_date DESC);
