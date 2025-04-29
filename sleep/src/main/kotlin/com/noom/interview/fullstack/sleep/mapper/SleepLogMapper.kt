@@ -13,6 +13,7 @@ class SleepLogMapper {
             sleepDate = sleepLog.sleepDate,
             timeToBed = sleepLog.localTimeToBed,
             timeOutOfBed = sleepLog.localTimeOutOfBed,
+            timeZoneId = sleepLog.timeZoneId,
             totalTimeInBed = sleepLog.totalTimeInBed,
             feeling = sleepLog.feeling
         )

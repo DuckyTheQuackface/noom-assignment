@@ -1,7 +1,7 @@
 package com.noom.interview.fullstack.sleep.db.entity
 
+import java.time.Instant
 import java.time.ZoneId
-import java.time.OffsetDateTime
 import javax.persistence.Column
 import javax.persistence.Entity
 import javax.persistence.GeneratedValue
@@ -23,8 +23,8 @@ data class User(
     var timeZone: String = ZoneId.systemDefault().toString(),
 
     @Column(name = "created_at", nullable = false, updatable = false)
-    var createdAt: OffsetDateTime = OffsetDateTime.now(),
+    val createdAt: Instant = Instant.now(),
 
     @Column(name = "updated_at", nullable = false)
-    var updatedAt: OffsetDateTime = OffsetDateTime.now()
+    val updatedAt: Instant = Instant.now()
 )

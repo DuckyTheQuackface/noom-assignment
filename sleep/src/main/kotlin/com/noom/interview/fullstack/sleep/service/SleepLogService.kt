@@ -12,6 +12,8 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.LocalDate
 import java.time.LocalTime
+import java.time.ZoneId
+import java.time.ZonedDateTime
 import java.time.temporal.ChronoUnit
 
 @Service
@@ -26,17 +28,34 @@ class SleepLogService(
         val user = userRepository.findById(userId)
             .orElseThrow { ResourceNotFoundException("User not found with id: $userId") }
 
-        // Calculate total time in bed
-        val totalTimeInBed = calculateTotalTimeInBed(
-            request.timeToBed,
-            request.timeOutOfBed
-        )
+        // Use the provided time zone or default to user's time zone
+        val timeZoneId = request.timeZoneId ?: user.timeZone
+        val zoneId = ZoneId.of(timeZoneId)
+
+        // Calculate total time in bed - simplified as confirmed by you
+        val totalTimeInBed = calculateTotalTimeInBed(request.timeToBed, request.timeOutOfBed)
+
+        // Create UTC times by combining date, local time, and time zone
+        val bedDateTime = ZonedDateTime.of(request.sleepDate, request.timeToBed, zoneId)
+        val utcBedTime = bedDateTime.toOffsetDateTime()
+
+        // For wake time, we need to handle if it's the next day
+        var wakeUpDate = request.sleepDate
+        if (request.timeOutOfBed.isBefore(request.timeToBed)) {
+            // If wake time is earlier than bed time, it's the next day
+            wakeUpDate = request.sleepDate.plusDays(1)
+        }
+        val wakeDateTime = ZonedDateTime.of(wakeUpDate, request.timeOutOfBed, zoneId)
+        val utcWakeTime = wakeDateTime.toOffsetDateTime()
 
         val sleepLog = SleepLog(
             user = user,
             sleepDate = request.sleepDate,
             localTimeToBed = request.timeToBed,
             localTimeOutOfBed = request.timeOutOfBed,
+            utcTimeToBed = utcBedTime,
+            utcTimeOutOfBed = utcWakeTime,
+            timeZoneId = timeZoneId,
             totalTimeInBed = totalTimeInBed,
             feeling = request.feeling
         )
@@ -106,8 +125,16 @@ class SleepLogService(
         )
     }
 
+    // Simplified method as confirmed by you
     private fun calculateTotalTimeInBed(bedTime: LocalTime, wakeTime: LocalTime): Int {
-        return ChronoUnit.MINUTES.between(bedTime, wakeTime).toInt()
+        var minutes = ChronoUnit.MINUTES.between(bedTime, wakeTime).toInt()
+
+        // If result is negative, it means sleep crossed midnight
+        if (minutes < 0) {
+            minutes += 24 * 60 // Add 24 hours in minutes
+        }
+
+        return minutes
     }
 
     private fun calculateAverageLocalTime(times: List<LocalTime>): LocalTime {

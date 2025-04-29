@@ -8,7 +8,8 @@ data class CreateSleepLogRequest(
     val sleepDate: LocalDate,
     val timeToBed: LocalTime,
     val timeOutOfBed: LocalTime,
-    val feeling: MorningFeeling
+    val feeling: MorningFeeling,
+    val timeZoneId: String? = null // Optional time zone ID for traveling users
 )
 
 data class SleepLogResponse(
@@ -16,6 +17,7 @@ data class SleepLogResponse(
     val sleepDate: LocalDate,
     val timeToBed: LocalTime,
     val timeOutOfBed: LocalTime,
+    val timeZoneId: String,
     val totalTimeInBed: Int, // in minutes
     val feeling: MorningFeeling
 )
