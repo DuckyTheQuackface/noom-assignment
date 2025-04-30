@@ -1,10 +1,12 @@
 package com.noom.interview.fullstack.sleep.sleeplog.controller
 
 import com.noom.interview.fullstack.sleep.shared.constants.X_USER_ID
-import com.noom.interview.fullstack.sleep.sleeplog.SleepLogService
 import com.noom.interview.fullstack.sleep.sleeplog.dto.request.CreateSleepLogRequest
 import com.noom.interview.fullstack.sleep.sleeplog.dto.response.SleepLogResponse
 import com.noom.interview.fullstack.sleep.sleeplog.dto.response.SleepStatsResponse
+import com.noom.interview.fullstack.sleep.sleeplog.usecase.CreateSleepLogUseCase
+import com.noom.interview.fullstack.sleep.sleeplog.usecase.GetLatestSleepLogUseCase
+import com.noom.interview.fullstack.sleep.sleeplog.usecase.GetSleepStatsUseCase
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.GetMapping
@@ -17,14 +19,16 @@ import org.springframework.web.bind.annotation.RestController
 @RestController
 @RequestMapping("/api/v1/sleep-logs")
 class SleepLogController(
-    private val sleepLogService: SleepLogService
+    private val createSleepLogUseCase: CreateSleepLogUseCase,
+    private val getLatestSleepLogUseCase: GetLatestSleepLogUseCase,
+    private val getSleepStatsUseCase: GetSleepStatsUseCase,
 ) {
     @PostMapping
     fun createSleepLog(
         @RequestHeader(X_USER_ID) userId: Long,
         @RequestBody request: CreateSleepLogRequest
     ): ResponseEntity<SleepLogResponse> {
-        val createdSleepLog = sleepLogService.createSleepLog(userId, request)
+        val createdSleepLog = createSleepLogUseCase.createSleepLog(userId, request)
         return ResponseEntity
             .status(HttpStatus.CREATED)
             .body(createdSleepLog)
@@ -34,7 +38,7 @@ class SleepLogController(
     fun getLatestSleepLog(
         @RequestHeader(X_USER_ID) userId: Long,
     ): ResponseEntity<SleepLogResponse> {
-        val latestSleepLog = sleepLogService.getLatestSleepLog(userId)
+        val latestSleepLog = getLatestSleepLogUseCase.getLatestSleepLog(userId)
         return ResponseEntity.ok(latestSleepLog)
     }
 
@@ -42,7 +46,7 @@ class SleepLogController(
     fun getSleepStats(
         @RequestHeader(X_USER_ID) userId: Long,
     ): ResponseEntity<SleepStatsResponse> {
-        val sleepStats = sleepLogService.getSleepStats(userId)
+        val sleepStats = getSleepStatsUseCase.getSleepStats(userId)
         return ResponseEntity.ok(sleepStats)
     }
 }

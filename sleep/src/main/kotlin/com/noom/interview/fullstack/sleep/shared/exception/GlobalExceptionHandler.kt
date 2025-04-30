@@ -55,4 +55,4 @@ data class ErrorResponse(
     val path: String?
 )
 
-class ResourceNotFoundException(message: String) : RuntimeException(message)
+open class ResourceNotFoundException(message: String) : RuntimeException(message)

@@ -78,7 +78,7 @@ class TestDataUtils {
             }
 
             return SleepLogEntity(
-                userEntity = userEntity,
+                user = userEntity,
                 sleepDate = sleepDate,
                 localTimeToBed = localTimeToBed,
                 localTimeOutOfBed = localTimeOutOfBed,

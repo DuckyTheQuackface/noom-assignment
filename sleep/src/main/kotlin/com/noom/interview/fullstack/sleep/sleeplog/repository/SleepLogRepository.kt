@@ -10,9 +10,8 @@ interface SleepLogRepository : JpaRepository<SleepLogEntity, Long> {
 
     fun findFirstByUserIdOrderBySleepDateDesc(userId: Long): SleepLogEntity?
 
-    fun findByUserIdAndSleepDateBetweenOrderBySleepDateDesc(
+    fun findByUserIdAndSleepDateIsGreaterThan(
         userId: Long,
-        startDate: LocalDate,
-        endDate: LocalDate
+        sleepDateAfter: LocalDate
     ): List<SleepLogEntity>
 }

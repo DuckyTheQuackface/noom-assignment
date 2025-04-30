@@ -6,15 +6,15 @@ import org.springframework.stereotype.Component
 
 @Component
 class SleepLogMapper {
-    fun toDto(sleepLogEntity: SleepLogEntity): SleepLogResponse {
+    fun toResponse(sleepLog: SleepLogEntity): SleepLogResponse {
         return SleepLogResponse(
-            id = sleepLogEntity.id,
-            sleepDate = sleepLogEntity.sleepDate,
-            timeToBed = sleepLogEntity.localTimeToBed,
-            timeOutOfBed = sleepLogEntity.localTimeOutOfBed,
-            timeZoneId = sleepLogEntity.timeZoneId,
-            totalTimeInBedMinutes = sleepLogEntity.totalTimeInBedMinutes,
-            feeling = sleepLogEntity.feeling
+            id = sleepLog.id,
+            sleepDate = sleepLog.sleepDate,
+            timeToBed = sleepLog.localTimeToBed,
+            timeOutOfBed = sleepLog.localTimeOutOfBed,
+            timeZoneId = sleepLog.timeZoneId,
+            totalTimeInBedMinutes = sleepLog.totalTimeInBedMinutes,
+            feeling = sleepLog.feeling
         )
     }
 }
