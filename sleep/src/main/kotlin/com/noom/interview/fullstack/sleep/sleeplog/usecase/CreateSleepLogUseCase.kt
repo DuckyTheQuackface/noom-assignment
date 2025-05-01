@@ -3,6 +3,7 @@ package com.noom.interview.fullstack.sleep.sleeplog.usecase
 import com.noom.interview.fullstack.sleep.sleeplog.dto.request.CreateSleepLogRequest
 import com.noom.interview.fullstack.sleep.sleeplog.dto.response.SleepLogResponse
 import com.noom.interview.fullstack.sleep.sleeplog.entity.SleepLogEntity
+import com.noom.interview.fullstack.sleep.sleeplog.exception.InvalidSleepDuration
 import com.noom.interview.fullstack.sleep.sleeplog.mapper.SleepLogMapper
 import com.noom.interview.fullstack.sleep.sleeplog.repository.SleepLogRepository
 import com.noom.interview.fullstack.sleep.user.UserService
@@ -12,6 +13,7 @@ import java.time.LocalTime
 import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.ZonedDateTime
+import java.time.Duration
 
 @Service
 class CreateSleepLogUseCase(
@@ -31,10 +33,8 @@ class CreateSleepLogUseCase(
         val timeZoneId = request.timeZoneId ?: user.timeZone
         val zoneId = ZoneId.of(timeZoneId)
         val (utcBedTime, utcWakeTime) = getUtcBedAndWakeTimes(request, zoneId)
-        val totalTimeInBed = calculateAndValidateSleepDuration(
-            request.timeToBed,
-            request.timeOutOfBed
-        )
+        val totalTimeInBed = calculateSleepDurationFromUtcTimes(utcBedTime, utcWakeTime)
+        validateSleepDuration(totalTimeInBed)
 
         val sleepLog = sleepLogRepository.save(
             SleepLogEntity(
@@ -62,7 +62,7 @@ class CreateSleepLogUseCase(
     // Day 2 of logging -> Night of 06.08., went to sleep at 01:00, woke up at 08:00
     // Day 3 of logging -> Night of 07.08., went to sleep at 00:00, woke up at 07:00
     // Day 4 of logging -> Night of 08.08., went to sleep at 22:00, woke up at 07:00
-    // eg. "Night of 05.08." represents sleep on 05.08., that should usually start at 23:00 and end at 07:00
+    // eg. "Night of 05.08." represents night of August 5th to August 6th
     private fun getUtcBedAndWakeTimes(
         request: CreateSleepLogRequest,
         zoneId: ZoneId
@@ -94,34 +94,23 @@ class CreateSleepLogUseCase(
         return bedDateTime.toOffsetDateTime() to wakeDateTime.toOffsetDateTime()
     }
 
-    private fun calculateAndValidateSleepDuration(
-        bedTime: LocalTime,
-        wakeTime: LocalTime
+    private fun calculateSleepDurationFromUtcTimes(
+        bedTime: OffsetDateTime,
+        wakeTime: OffsetDateTime
     ): Int {
-        val bedMinutes = bedTime.hour * 60 + bedTime.minute
-        val wakeMinutes = wakeTime.hour * 60 + wakeTime.minute
-
-        val sleepDuration = if (wakeMinutes >= bedMinutes) {
-            wakeMinutes - bedMinutes
-        } else {
-            // If wake time is earlier in the day than bed time, add 24 hours worth of minutes
-            1440 - bedMinutes + wakeMinutes
-        }
-
-        validateSleepDuration(sleepDuration)
-
-        return sleepDuration
+        val durationMinutes = Duration.between(bedTime, wakeTime).toMinutes().toInt()
+        return durationMinutes
     }
 
     private fun validateSleepDuration(totalTimeInBedMinutes: Int) {
         if (totalTimeInBedMinutes < MINIMUM_SLEEP_TIME_MINUTES) {
-            throw IllegalArgumentException(
+            throw InvalidSleepDuration(
                 "Sleep duration must be at least ${MINIMUM_SLEEP_TIME_MINUTES / 60} hours"
             )
         }
 
         if (totalTimeInBedMinutes > MAXIMUM_SLEEP_TIME_MINUTES) {
-            throw IllegalArgumentException(
+            throw InvalidSleepDuration(
                 "Sleep duration cannot exceed ${MAXIMUM_SLEEP_TIME_MINUTES / 60} hours"
             )
         }
