@@ -12,7 +12,6 @@ import java.time.LocalTime
 import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.ZonedDateTime
-import java.time.temporal.ChronoUnit
 
 @Service
 class CreateSleepLogUseCase(
@@ -20,33 +19,38 @@ class CreateSleepLogUseCase(
     private val sleepLogMapper: SleepLogMapper,
     private val userService: UserService
 ) {
+    companion object {
+        private const val MINUTES_IN_HOUR = 60
+        private const val MINIMUM_SLEEP_TIME_MINUTES = 2 * MINUTES_IN_HOUR
+        private const val MAXIMUM_SLEEP_TIME_MINUTES = 16 * MINUTES_IN_HOUR
+    }
+
     @Transactional
     fun createSleepLog(userId: Long, request: CreateSleepLogRequest): SleepLogResponse {
         val user = userService.getUserById(userId)
-
         val timeZoneId = request.timeZoneId ?: user.timeZone
         val zoneId = ZoneId.of(timeZoneId)
-
-        val totalTimeInBed = calculateTotalTimeInBed(request.timeToBed, request.timeOutOfBed)
-        val (utcBedTime, utcWakeTime) = getUtcBedAndWakeTimes(request, zoneId, totalTimeInBed)
-
-        val sleepLog = SleepLogEntity(
-            user = user,
-            sleepDate = request.sleepDate,
-            localTimeToBed = request.timeToBed,
-            localTimeOutOfBed = request.timeOutOfBed,
-            utcTimeToBed = utcBedTime,
-            utcTimeOutOfBed = utcWakeTime,
-            timeZoneId = timeZoneId,
-            totalTimeInBedMinutes = totalTimeInBed,
-            feeling = request.feeling
+        val (utcBedTime, utcWakeTime) = getUtcBedAndWakeTimes(request, zoneId)
+        val totalTimeInBed = calculateAndValidateSleepDuration(
+            request.timeToBed,
+            request.timeOutOfBed
         )
 
-        val savedSleepLog = sleepLogRepository.save(sleepLog)
+        val sleepLog = sleepLogRepository.save(
+            SleepLogEntity(
+                user = user,
+                sleepDate = request.sleepDate,
+                localTimeToBed = request.timeToBed,
+                localTimeOutOfBed = request.timeOutOfBed,
+                utcTimeToBed = utcBedTime,
+                utcTimeOutOfBed = utcWakeTime,
+                timeZoneId = timeZoneId,
+                totalTimeInBedMinutes = totalTimeInBed,
+                feeling = request.feeling
+            )
+        )
 
-        // Convert to DTO and return
-        // We need to ensure all fields are correctly preserved in the mapping
-        return sleepLogMapper.toResponse(savedSleepLog)
+        return sleepLogMapper.toResponse(sleepLog)
     }
 
     // Assuming client is allowing user to enter one time for each night.
@@ -61,37 +65,65 @@ class CreateSleepLogUseCase(
     // eg. "Night of 05.08." represents sleep on 05.08., that should usually start at 23:00 and end at 07:00
     private fun getUtcBedAndWakeTimes(
         request: CreateSleepLogRequest,
-        zoneId: ZoneId,
-        totalTimeInBed: Int
+        zoneId: ZoneId
     ): Pair<OffsetDateTime, OffsetDateTime> {
-        val bedDateTime = if (
+        val bedDate = if (
             request.timeToBed.isAfter(LocalTime.NOON) &&
             request.timeToBed != LocalTime.MIDNIGHT
         ) {
-            // <12:00-00:00>
-            ZonedDateTime.of(request.sleepDate, request.timeToBed, zoneId)
+            request.sleepDate
         } else {
-            // [00:00-12:00]
-            ZonedDateTime.of(request.sleepDate.plusDays(1), request.timeToBed, zoneId)
+            request.sleepDate.plusDays(1)
+        }
+        val bedDateTime = ZonedDateTime.of(bedDate, request.timeToBed, zoneId)
+
+        val wakeDateTime = if (
+            request.timeOutOfBed.isBefore(request.timeToBed) &&
+            request.timeToBed.isAfter(LocalTime.NOON) &&
+            request.timeToBed != LocalTime.MIDNIGHT
+        ) {
+            // Standard case: went to bed in evening, woke up in morning
+            ZonedDateTime.of(bedDate.plusDays(1), request.timeOutOfBed, zoneId)
+        } else {
+            // Either:
+            // - wake time is later than bed time (same day)
+            // - or bed time is already after midnight, so wake time is same day even if earlier
+            ZonedDateTime.of(bedDate, request.timeOutOfBed, zoneId)
         }
 
-        val utcBedTime = bedDateTime.toOffsetDateTime()
-        val utcWakeTime = utcBedTime.plusMinutes(totalTimeInBed.toLong())
-
-        return utcBedTime to utcWakeTime
+        return bedDateTime.toOffsetDateTime() to wakeDateTime.toOffsetDateTime()
     }
 
-    private fun calculateTotalTimeInBed(bedTime: LocalTime, wakeTime: LocalTime): Int {
-        var minutes = ChronoUnit.MINUTES.between(bedTime, wakeTime).toInt()
+    private fun calculateAndValidateSleepDuration(
+        bedTime: LocalTime,
+        wakeTime: LocalTime
+    ): Int {
+        val bedMinutes = bedTime.hour * 60 + bedTime.minute
+        val wakeMinutes = wakeTime.hour * 60 + wakeTime.minute
 
-        if (minutes < 0) {
-            minutes += 24 * 60 // Add 24 hours in minutes
+        val sleepDuration = if (wakeMinutes >= bedMinutes) {
+            wakeMinutes - bedMinutes
+        } else {
+            // If wake time is earlier in the day than bed time, add 24 hours worth of minutes
+            1440 - bedMinutes + wakeMinutes
         }
 
-        if (minutes == 0 && bedTime == wakeTime) {
-            minutes = 24 * 60 // Assume 24 hours if both times are identical
+        validateSleepDuration(sleepDuration)
+
+        return sleepDuration
+    }
+
+    private fun validateSleepDuration(totalTimeInBedMinutes: Int) {
+        if (totalTimeInBedMinutes < MINIMUM_SLEEP_TIME_MINUTES) {
+            throw IllegalArgumentException(
+                "Sleep duration must be at least ${MINIMUM_SLEEP_TIME_MINUTES / 60} hours"
+            )
         }
 
-        return minutes
+        if (totalTimeInBedMinutes > MAXIMUM_SLEEP_TIME_MINUTES) {
+            throw IllegalArgumentException(
+                "Sleep duration cannot exceed ${MAXIMUM_SLEEP_TIME_MINUTES / 60} hours"
+            )
+        }
     }
 }

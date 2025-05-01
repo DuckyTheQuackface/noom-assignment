@@ -1,7 +1,6 @@
 package com.noom.interview.fullstack.sleep.sleeplog.usecase
 
 import com.noom.interview.fullstack.sleep.sleeplog.dto.request.CreateSleepLogRequest
-import com.noom.interview.fullstack.sleep.sleeplog.dto.response.SleepLogResponse
 import com.noom.interview.fullstack.sleep.sleeplog.entity.MorningFeeling
 import com.noom.interview.fullstack.sleep.sleeplog.entity.SleepLogEntity
 import com.noom.interview.fullstack.sleep.sleeplog.mapper.SleepLogMapper
@@ -12,17 +11,21 @@ import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.Arguments
+import org.junit.jupiter.params.provider.MethodSource
 import org.mockito.ArgumentCaptor
 import org.mockito.Captor
 import org.mockito.Mock
 import org.mockito.Mockito.*
 import org.mockito.junit.jupiter.MockitoExtension
 import java.time.*
+import java.util.stream.Stream
 
 @ExtendWith(MockitoExtension::class)
 class CreateSleepLogUseCaseTest {
 
-    @Mock
+    @Mock(lenient = true)
     private lateinit var sleepLogRepository: SleepLogRepository
 
     @Mock
@@ -36,15 +39,6 @@ class CreateSleepLogUseCaseTest {
     private val userId = 1L
     private val defaultTimeZone = "America/New_York"
     private val mockUser = UserEntity(id = userId, username = "testuser", timeZone = defaultTimeZone)
-    private val mockResponse = SleepLogResponse(
-        id = 1L,
-        sleepDate = LocalDate.now(),
-        timeToBed = LocalTime.of(23, 0),
-        timeOutOfBed = LocalTime.of(7, 0),
-        totalTimeInBedMinutes = 480,
-        feeling = MorningFeeling.GOOD,
-        timeZoneId = defaultTimeZone
-    )
 
     @BeforeEach
     fun setUp() {
@@ -57,18 +51,25 @@ class CreateSleepLogUseCaseTest {
         `when`(sleepLogRepository.save(any())).thenAnswer { it.arguments[0] as SleepLogEntity }
     }
 
-    @Test
-    fun `test create sleep log - standard evening to morning sleep`() {
+    @ParameterizedTest(name = "Should calculate correct UTC times when {0}")
+    @MethodSource("sleepTimeScenarios")
+    fun `should calculate correct UTC times when various sleep patterns are entered`(
+        testName: String,
+        sleepDate: LocalDate,
+        timeToBed: LocalTime,
+        timeOutOfBed: LocalTime,
+        timeZoneId: String,
+        expectedTotalMinutes: Int,
+        expectedUtcBedTime: OffsetDateTime,
+        expectedUtcWakeTime: OffsetDateTime
+    ) {
         // Given
-        val sleepDate = LocalDate.of(2023, 5, 8)
-        val timeToBed = LocalTime.of(23, 0)
-        val timeOutOfBed = LocalTime.of(7, 0)
         val request = CreateSleepLogRequest(
             sleepDate = sleepDate,
             timeToBed = timeToBed,
             timeOutOfBed = timeOutOfBed,
             feeling = MorningFeeling.GOOD,
-            timeZoneId = defaultTimeZone
+            timeZoneId = timeZoneId
         )
 
         // When
@@ -81,37 +82,36 @@ class CreateSleepLogUseCaseTest {
         assertEquals(sleepDate, savedEntity.sleepDate)
         assertEquals(timeToBed, savedEntity.localTimeToBed)
         assertEquals(timeOutOfBed, savedEntity.localTimeOutOfBed)
-        assertEquals(480, savedEntity.totalTimeInBedMinutes)
-        assertEquals(MorningFeeling.GOOD, savedEntity.feeling)
-        assertEquals(defaultTimeZone, savedEntity.timeZoneId)
-
-        // Verify UTC times converted correctly
-        val zoneId = ZoneId.of(defaultTimeZone)
-        val expectedUtcBedTime = ZonedDateTime.of(sleepDate, timeToBed, zoneId).toOffsetDateTime()
-        val expectedUtcWakeTime = expectedUtcBedTime.plusMinutes(480)
-
+        assertEquals(expectedTotalMinutes, savedEntity.totalTimeInBedMinutes)
+        assertEquals(timeZoneId, savedEntity.timeZoneId)
         assertEquals(expectedUtcBedTime, savedEntity.utcTimeToBed)
         assertEquals(expectedUtcWakeTime, savedEntity.utcTimeOutOfBed)
-
-        assertEquals(480, result.totalTimeInBedMinutes)
+        assertEquals(expectedTotalMinutes, result.totalTimeInBedMinutes)
     }
 
-    @Test
-    fun `test create sleep log - after midnight to morning sleep`() {
+    @ParameterizedTest(name = "Should handle different timezones when {0}")
+    @MethodSource("timeZoneScenarios")
+    fun `should handle different timezones when logging sleep on various dates and times`(
+        testName: String,
+        sleepDate: LocalDate,
+        timeToBed: LocalTime,
+        timeOutOfBed: LocalTime,
+        timeZoneId: String,
+        expectedTotalMinutes: Int,
+        expectedUtcBedTime: OffsetDateTime,
+        expectedUtcWakeTime: OffsetDateTime
+    ) {
         // Given
-        val sleepDate = LocalDate.of(2023, 5, 8)  // This is the sleep's reference date
-        val timeToBed = LocalTime.of(1, 0)    // 1:00 AM
-        val timeOutOfBed = LocalTime.of(8, 0) // 8:00 AM
         val request = CreateSleepLogRequest(
             sleepDate = sleepDate,
             timeToBed = timeToBed,
             timeOutOfBed = timeOutOfBed,
             feeling = MorningFeeling.OK,
-            timeZoneId = defaultTimeZone
+            timeZoneId = timeZoneId
         )
 
         // When
-        createSleepLogUseCase.createSleepLog(userId, request)
+        val result = createSleepLogUseCase.createSleepLog(userId, request)
 
         // Then
         verify(sleepLogRepository).save(sleepLogCaptor.capture())
@@ -120,33 +120,35 @@ class CreateSleepLogUseCaseTest {
         assertEquals(sleepDate, savedEntity.sleepDate)
         assertEquals(timeToBed, savedEntity.localTimeToBed)
         assertEquals(timeOutOfBed, savedEntity.localTimeOutOfBed)
-        assertEquals(420, savedEntity.totalTimeInBedMinutes) // 7 hours = 420 minutes
-
-        // Since the bed time is early morning, it should be on the next day (sleepDate + 1)
-        val zoneId = ZoneId.of(defaultTimeZone)
-        val expectedUtcBedTime = ZonedDateTime.of(sleepDate.plusDays(1), timeToBed, zoneId).toOffsetDateTime()
-        val expectedUtcWakeTime = expectedUtcBedTime.plusMinutes(420)
-
+        assertEquals(expectedTotalMinutes, savedEntity.totalTimeInBedMinutes)
+        assertEquals(timeZoneId, savedEntity.timeZoneId)
         assertEquals(expectedUtcBedTime, savedEntity.utcTimeToBed)
         assertEquals(expectedUtcWakeTime, savedEntity.utcTimeOutOfBed)
     }
 
-    @Test
-    fun `test create sleep log - evening to after midnight wake up`() {
+    @ParameterizedTest(name = "Should handle daylight saving time when {0}")
+    @MethodSource("daylightSavingTimeScenarios")
+    fun `should handle daylight saving time when logging sleep during clock changes`(
+        testName: String,
+        sleepDate: LocalDate,
+        timeToBed: LocalTime,
+        timeOutOfBed: LocalTime,
+        timeZoneId: String,
+        expectedTotalMinutes: Int,
+        expectedUtcBedTime: OffsetDateTime,
+        expectedUtcWakeTime: OffsetDateTime
+    ) {
         // Given
-        val sleepDate = LocalDate.of(2023, 5, 8)
-        val timeToBed = LocalTime.of(22, 0)    // 10:00 PM
-        val timeOutOfBed = LocalTime.of(2, 0)  // 2:00 AM next day
         val request = CreateSleepLogRequest(
             sleepDate = sleepDate,
             timeToBed = timeToBed,
             timeOutOfBed = timeOutOfBed,
             feeling = MorningFeeling.BAD,
-            timeZoneId = defaultTimeZone
+            timeZoneId = timeZoneId
         )
 
         // When
-        createSleepLogUseCase.createSleepLog(userId, request)
+        val result = createSleepLogUseCase.createSleepLog(userId, request)
 
         // Then
         verify(sleepLogRepository).save(sleepLogCaptor.capture())
@@ -155,126 +157,14 @@ class CreateSleepLogUseCaseTest {
         assertEquals(sleepDate, savedEntity.sleepDate)
         assertEquals(timeToBed, savedEntity.localTimeToBed)
         assertEquals(timeOutOfBed, savedEntity.localTimeOutOfBed)
-        assertEquals(240, savedEntity.totalTimeInBedMinutes) // 4 hours = 240 minutes
-
-        // Bed time is in evening of sleepDate
-        val zoneId = ZoneId.of(defaultTimeZone)
-        val expectedUtcBedTime = ZonedDateTime.of(sleepDate, timeToBed, zoneId).toOffsetDateTime()
-        val expectedUtcWakeTime = expectedUtcBedTime.plusMinutes(240)
-
+        assertEquals(expectedTotalMinutes, savedEntity.totalTimeInBedMinutes)
+        assertEquals(timeZoneId, savedEntity.timeZoneId)
         assertEquals(expectedUtcBedTime, savedEntity.utcTimeToBed)
         assertEquals(expectedUtcWakeTime, savedEntity.utcTimeOutOfBed)
     }
 
     @Test
-    fun `test create sleep log - midnight exactly`() {
-        // Given
-        val sleepDate = LocalDate.of(2023, 5, 8)
-        val timeToBed = LocalTime.MIDNIGHT      // 12:00 AM
-        val timeOutOfBed = LocalTime.of(8, 0)   // 8:00 AM
-        val request = CreateSleepLogRequest(
-            sleepDate = sleepDate,
-            timeToBed = timeToBed,
-            timeOutOfBed = timeOutOfBed,
-            feeling = MorningFeeling.GOOD,
-            timeZoneId = defaultTimeZone
-        )
-
-        // When
-        createSleepLogUseCase.createSleepLog(userId, request)
-
-        // Then
-        verify(sleepLogRepository).save(sleepLogCaptor.capture())
-        val savedEntity = sleepLogCaptor.value
-
-        assertEquals(sleepDate, savedEntity.sleepDate)
-        assertEquals(timeToBed, savedEntity.localTimeToBed)
-        assertEquals(timeOutOfBed, savedEntity.localTimeOutOfBed)
-        assertEquals(480, savedEntity.totalTimeInBedMinutes) // 8 hours = 480 minutes
-
-        // Midnight should be considered as part of the next day (sleepDate + 1)
-        val zoneId = ZoneId.of(defaultTimeZone)
-        val expectedUtcBedTime = ZonedDateTime.of(sleepDate.plusDays(1), timeToBed, zoneId).toOffsetDateTime()
-        val expectedUtcWakeTime = expectedUtcBedTime.plusMinutes(480)
-
-        assertEquals(expectedUtcBedTime, savedEntity.utcTimeToBed)
-        assertEquals(expectedUtcWakeTime, savedEntity.utcTimeOutOfBed)
-    }
-
-    @Test
-    fun `test create sleep log - noon exactly`() {
-        // Given
-        val sleepDate = LocalDate.of(2023, 5, 8)
-        val timeToBed = LocalTime.NOON          // 12:00 PM
-        val timeOutOfBed = LocalTime.of(20, 0)  // 8:00 PM
-        val request = CreateSleepLogRequest(
-            sleepDate = sleepDate,
-            timeToBed = timeToBed,
-            timeOutOfBed = timeOutOfBed,
-            feeling = MorningFeeling.OK,
-            timeZoneId = defaultTimeZone
-        )
-
-        // When
-        createSleepLogUseCase.createSleepLog(userId, request)
-
-        // Then
-        verify(sleepLogRepository).save(sleepLogCaptor.capture())
-        val savedEntity = sleepLogCaptor.value
-
-        assertEquals(sleepDate, savedEntity.sleepDate)
-        assertEquals(timeToBed, savedEntity.localTimeToBed)
-        assertEquals(timeOutOfBed, savedEntity.localTimeOutOfBed)
-        assertEquals(480, savedEntity.totalTimeInBedMinutes) // 8 hours = 480 minutes
-
-        // Noon should be on the current day
-        val zoneId = ZoneId.of(defaultTimeZone)
-        val expectedUtcBedTime = ZonedDateTime.of(sleepDate.plusDays(1), timeToBed, zoneId).toOffsetDateTime()
-        val expectedUtcWakeTime = expectedUtcBedTime.plusMinutes(480)
-
-        assertEquals(expectedUtcBedTime, savedEntity.utcTimeToBed)
-        assertEquals(expectedUtcWakeTime, savedEntity.utcTimeOutOfBed)
-    }
-
-    @Test
-    fun `test create sleep log - different timezone specified`() {
-        // Given
-        val sleepDate = LocalDate.of(2023, 5, 8)
-        val timeToBed = LocalTime.of(23, 0)
-        val timeOutOfBed = LocalTime.of(7, 0)
-        val customTimeZone = "Europe/London"
-        val request = CreateSleepLogRequest(
-            sleepDate = sleepDate,
-            timeToBed = timeToBed,
-            timeOutOfBed = timeOutOfBed,
-            feeling = MorningFeeling.GOOD,
-            timeZoneId = customTimeZone
-        )
-
-        // When
-        createSleepLogUseCase.createSleepLog(userId, request)
-
-        // Then
-        verify(sleepLogRepository).save(sleepLogCaptor.capture())
-        val savedEntity = sleepLogCaptor.value
-
-        assertEquals(sleepDate, savedEntity.sleepDate)
-        assertEquals(timeToBed, savedEntity.localTimeToBed)
-        assertEquals(timeOutOfBed, savedEntity.localTimeOutOfBed)
-        assertEquals(480, savedEntity.totalTimeInBedMinutes) // 8 hours = 480 minutes
-        assertEquals(customTimeZone, savedEntity.timeZoneId)
-
-        // Calculate expected UTC times using the custom timezone
-        val zoneId = ZoneId.of(customTimeZone)
-        val expectedUtcBedTime = ZonedDateTime.of(sleepDate, timeToBed, zoneId).toOffsetDateTime()
-        val expectedUtcWakeTime = expectedUtcBedTime.plusMinutes(480)
-
-        assertEquals(expectedUtcBedTime, savedEntity.utcTimeToBed)
-        assertEquals(expectedUtcWakeTime, savedEntity.utcTimeOutOfBed)
-    }
-
-    @Test
-    fun `test create sleep log - user default timezone used when not specified`() {
+    fun `should use user default timezone when timeZoneId is not provided`() {
         // Given
         val sleepDate = LocalDate.of(2023, 5, 8)
         val timeToBed = LocalTime.of(23, 0)
@@ -288,7 +178,7 @@ class CreateSleepLogUseCaseTest {
         )
 
         // When
-        createSleepLogUseCase.createSleepLog(userId, request)
+        val result = createSleepLogUseCase.createSleepLog(userId, request)
 
         // Then
         verify(sleepLogRepository).save(sleepLogCaptor.capture())
@@ -298,10 +188,11 @@ class CreateSleepLogUseCaseTest {
         assertEquals(timeToBed, savedEntity.localTimeToBed)
         assertEquals(timeOutOfBed, savedEntity.localTimeOutOfBed)
         assertEquals(defaultTimeZone, savedEntity.timeZoneId)
+        assertEquals(480, savedEntity.totalTimeInBedMinutes)
 
-        // Calculate expected UTC times using the user's default timezone
-        val zoneId = ZoneId.of(defaultTimeZone)
-        val expectedUtcBedTime = ZonedDateTime.of(sleepDate, timeToBed, zoneId).toOffsetDateTime()
+        // The expected UTC time for America/New_York at 23:00 on May 8, 2023
+        val expectedBedTimeOffset = ZoneOffset.ofHours(-4) // EDT (UTC-4) for this date
+        val expectedUtcBedTime = OffsetDateTime.of(2023, 5, 8, 23, 0, 0, 0, expectedBedTimeOffset)
         val expectedUtcWakeTime = expectedUtcBedTime.plusMinutes(480)
 
         assertEquals(expectedUtcBedTime, savedEntity.utcTimeToBed)
@@ -309,11 +200,11 @@ class CreateSleepLogUseCaseTest {
     }
 
     @Test
-    fun `test create sleep log - 24 hour sleep duration`() {
+    fun `should throw exception when sleep duration is less than minimum allowed`() {
         // Given
         val sleepDate = LocalDate.of(2023, 5, 8)
-        val timeToBed = LocalTime.of(7, 0)      // 7:00 AM
-        val timeOutOfBed = LocalTime.of(7, 0)   // 7:00 AM (next day)
+        val timeToBed = LocalTime.of(21, 0)
+        val timeOutOfBed = LocalTime.of(22, 30)
         val request = CreateSleepLogRequest(
             sleepDate = sleepDate,
             timeToBed = timeToBed,
@@ -322,25 +213,19 @@ class CreateSleepLogUseCaseTest {
             timeZoneId = defaultTimeZone
         )
 
-        // When
-        createSleepLogUseCase.createSleepLog(userId, request)
-
-        // Then
-        verify(sleepLogRepository).save(sleepLogCaptor.capture())
-        val savedEntity = sleepLogCaptor.value
-
-        assertEquals(sleepDate, savedEntity.sleepDate)
-        assertEquals(timeToBed, savedEntity.localTimeToBed)
-        assertEquals(timeOutOfBed, savedEntity.localTimeOutOfBed)
-        assertEquals(1440, savedEntity.totalTimeInBedMinutes) // 24 hours = 1440 minutes
+        // When & Then
+        val exception = assertThrows(IllegalArgumentException::class.java) {
+            createSleepLogUseCase.createSleepLog(userId, request)
+        }
+        assertTrue(exception.message!!.contains("Sleep duration must be at least 2 hours"))
     }
 
     @Test
-    fun `test create sleep log - very short sleep`() {
+    fun `should throw exception when sleep duration exceeds maximum allowed`() {
         // Given
         val sleepDate = LocalDate.of(2023, 5, 8)
-        val timeToBed = LocalTime.of(23, 50)    // 11:50 PM
-        val timeOutOfBed = LocalTime.of(0, 10)  // 12:10 AM next day
+        val timeToBed = LocalTime.of(22, 0)
+        val timeOutOfBed = LocalTime.of(16, 0) // 24 hours (1440 minutes) of sleep
         val request = CreateSleepLogRequest(
             sleepDate = sleepDate,
             timeToBed = timeToBed,
@@ -349,72 +234,273 @@ class CreateSleepLogUseCaseTest {
             timeZoneId = defaultTimeZone
         )
 
-        // When
-        createSleepLogUseCase.createSleepLog(userId, request)
-
-        // Then
-        verify(sleepLogRepository).save(sleepLogCaptor.capture())
-        val savedEntity = sleepLogCaptor.value
-
-        assertEquals(sleepDate, savedEntity.sleepDate)
-        assertEquals(timeToBed, savedEntity.localTimeToBed)
-        assertEquals(timeOutOfBed, savedEntity.localTimeOutOfBed)
-        assertEquals(20, savedEntity.totalTimeInBedMinutes)
-
-        // Evening bed time
-        val zoneId = ZoneId.of(defaultTimeZone)
-        val expectedUtcBedTime = ZonedDateTime.of(sleepDate, timeToBed, zoneId).toOffsetDateTime()
-        val expectedUtcWakeTime = expectedUtcBedTime.plusMinutes(20)
-
-        assertEquals(expectedUtcBedTime, savedEntity.utcTimeToBed)
-        assertEquals(expectedUtcWakeTime, savedEntity.utcTimeOutOfBed)
+        // When & Then
+        val exception = assertThrows(IllegalArgumentException::class.java) {
+            createSleepLogUseCase.createSleepLog(userId, request)
+        }
+        assertTrue(exception.message!!.contains("Sleep duration cannot exceed 16 hours"))
     }
 
-    @Test
-    fun `test create sleep log - long sleep crossing multiple days`() {
-        // Given
-        val sleepDate = LocalDate.of(2023, 5, 8)
-        val timeToBed = LocalTime.of(22, 0)     // 10:00 PM
-        val timeOutOfBed = LocalTime.of(11, 0)  // 11:00 AM next day
-        val request = CreateSleepLogRequest(
-            sleepDate = sleepDate,
-            timeToBed = timeToBed,
-            timeOutOfBed = timeOutOfBed,
-            feeling = MorningFeeling.GOOD,
-            timeZoneId = defaultTimeZone
-        )
+    companion object {
+        @JvmStatic
+        fun sleepTimeScenarios(): Stream<Arguments> {
+            return Stream.of(
+                // Evening to morning sleep (standard case)
+                Arguments.of(
+                    "sleeping from evening to morning",
+                    LocalDate.of(2023, 5, 8),
+                    LocalTime.of(23, 0), // 11:00 PM
+                    LocalTime.of(7, 0),  // 7:00 AM
+                    "America/New_York",
+                    480, // 8 hours = 480 minutes
+                    OffsetDateTime.of(2023, 5, 8, 23, 0, 0, 0, ZoneOffset.ofHours(-4)),
+                    OffsetDateTime.of(2023, 5, 9, 7, 0, 0, 0, ZoneOffset.ofHours(-4))
+                ),
 
-        // When
-        createSleepLogUseCase.createSleepLog(userId, request)
+                // After midnight to morning sleep
+                Arguments.of(
+                    "sleeping from after midnight to morning",
+                    LocalDate.of(2023, 5, 8),
+                    LocalTime.of(1, 0),  // 1:00 AM
+                    LocalTime.of(8, 0),  // 8:00 AM
+                    "America/New_York",
+                    420, // 7 hours = 420 minutes
+                    OffsetDateTime.of(2023, 5, 9, 1, 0, 0, 0, ZoneOffset.ofHours(-4)),
+                    OffsetDateTime.of(2023, 5, 9, 8, 0, 0, 0, ZoneOffset.ofHours(-4))
+                ),
 
-        // Then
-        verify(sleepLogRepository).save(sleepLogCaptor.capture())
-        val savedEntity = sleepLogCaptor.value
+                // Evening to after midnight wake up
+                Arguments.of(
+                    "sleeping from evening to after midnight",
+                    LocalDate.of(2023, 5, 8),
+                    LocalTime.of(22, 0), // 10:00 PM
+                    LocalTime.of(2, 0),  // 2:00 AM next day
+                    "America/New_York",
+                    240, // 4 hours = 240 minutes
+                    OffsetDateTime.of(2023, 5, 8, 22, 0, 0, 0, ZoneOffset.ofHours(-4)),
+                    OffsetDateTime.of(2023, 5, 9, 2, 0, 0, 0, ZoneOffset.ofHours(-4))
+                ),
 
-        assertEquals(sleepDate, savedEntity.sleepDate)
-        assertEquals(timeToBed, savedEntity.localTimeToBed)
-        assertEquals(timeOutOfBed, savedEntity.localTimeOutOfBed)
-        assertEquals(780, savedEntity.totalTimeInBedMinutes) // 13 hours = 780 minutes
-    }
+                // Midnight exactly
+                Arguments.of(
+                    "sleeping from midnight exactly",
+                    LocalDate.of(2023, 5, 8),
+                    LocalTime.MIDNIGHT, // 12:00 AM
+                    LocalTime.of(8, 0),  // 8:00 AM
+                    "America/New_York",
+                    480, // 8 hours = 480 minutes
+                    OffsetDateTime.of(2023, 5, 9, 0, 0, 0, 0, ZoneOffset.ofHours(-4)),
+                    OffsetDateTime.of(2023, 5, 9, 8, 0, 0, 0, ZoneOffset.ofHours(-4))
+                ),
 
-    @Test
-    fun `test create sleep log - response mapping`() {
-        // Given
-        val sleepDate = LocalDate.of(2023, 5, 8)
-        val timeToBed = LocalTime.of(23, 0)
-        val timeOutOfBed = LocalTime.of(7, 0)
-        val request = CreateSleepLogRequest(
-            sleepDate = sleepDate,
-            timeToBed = timeToBed,
-            timeOutOfBed = timeOutOfBed,
-            feeling = MorningFeeling.GOOD,
-            timeZoneId = defaultTimeZone
-        )
+                // Noon sleep (daytime sleep)
+                Arguments.of(
+                    "sleeping during daytime (noon)",
+                    LocalDate.of(2023, 5, 8),
+                    LocalTime.NOON,     // 12:00 PM
+                    LocalTime.of(20, 0), // 8:00 PM
+                    "America/New_York",
+                    480, // 8 hours = 480 minutes
+                    OffsetDateTime.of(2023, 5, 9, 12, 0, 0, 0, ZoneOffset.ofHours(-4)),
+                    OffsetDateTime.of(2023, 5, 9, 20, 0, 0, 0, ZoneOffset.ofHours(-4))
+                ),
 
-        // When
-        val result = createSleepLogUseCase.createSleepLog(userId, request)
+                // Minimal allowed sleep
+                Arguments.of(
+                    "sleeping for minimum allowed duration",
+                    LocalDate.of(2023, 5, 8),
+                    LocalTime.of(23, 0), // 11:00 PM
+                    LocalTime.of(1, 0),  // 1:00 AM next day
+                    "America/New_York",
+                    120, // 2 hours = 120 minutes (minimum)
+                    OffsetDateTime.of(2023, 5, 8, 23, 0, 0, 0, ZoneOffset.ofHours(-4)),
+                    OffsetDateTime.of(2023, 5, 9, 1, 0, 0, 0, ZoneOffset.ofHours(-4))
+                ),
 
-        // Then
-        assertEquals(480, result.totalTimeInBedMinutes)
+                // Maximum allowed sleep
+                Arguments.of(
+                    "sleeping for maximum allowed duration",
+                    LocalDate.of(2023, 5, 8),
+                    LocalTime.of(20, 0), // 8:00 PM
+                    LocalTime.of(12, 0), // 12:00 PM next day
+                    "America/New_York",
+                    960, // 16 hours = 960 minutes (maximum)
+                    OffsetDateTime.of(2023, 5, 8, 20, 0, 0, 0, ZoneOffset.ofHours(-4)),
+                    OffsetDateTime.of(2023, 5, 9, 12, 0, 0, 0, ZoneOffset.ofHours(-4))
+                )
+            )
+        }
+
+        @JvmStatic
+        fun timeZoneScenarios(): Stream<Arguments> {
+            return Stream.of(
+                // Month beginning edge case - New York (UTC-4/5)
+                Arguments.of(
+                    "logging at the start of month in NYC",
+                    LocalDate.of(2025, 5, 1),
+                    LocalTime.of(23, 0), // 11:00 PM
+                    LocalTime.of(7, 0),  // 7:00 AM
+                    "America/New_York",
+                    480, // 8 hours = 480 minutes
+                    OffsetDateTime.of(2025, 5, 1, 23, 0, 0, 0, ZoneOffset.ofHours(-4)),
+                    OffsetDateTime.of(2025, 5, 2, 7, 0, 0, 0, ZoneOffset.ofHours(-4))
+                ),
+
+                // Year end edge case - Tokyo (UTC+9)
+                Arguments.of(
+                    "logging at the end of year in Tokyo",
+                    LocalDate.of(2024, 12, 31),
+                    LocalTime.of(23, 0), // 11:00 PM
+                    LocalTime.of(7, 0),  // 7:00 AM
+                    "Asia/Tokyo",
+                    480, // 8 hours = 480 minutes
+                    OffsetDateTime.of(2024, 12, 31, 23, 0, 0, 0, ZoneOffset.ofHours(9)),
+                    OffsetDateTime.of(2025, 1, 1, 7, 0, 0, 0, ZoneOffset.ofHours(9))
+                ),
+
+                // Sydney, Australia (UTC+10/11)
+                Arguments.of(
+                    "logging sleep in Sydney",
+                    LocalDate.of(2023, 5, 8),
+                    LocalTime.of(22, 0), // 10:00 PM
+                    LocalTime.of(6, 0),  // 6:00 AM
+                    "Australia/Sydney",
+                    480, // 8 hours = 480 minutes
+                    OffsetDateTime.of(2023, 5, 8, 22, 0, 0, 0, ZoneOffset.ofHours(10)),
+                    OffsetDateTime.of(2023, 5, 9, 6, 0, 0, 0, ZoneOffset.ofHours(10))
+                ),
+
+                // London (UTC+0/1)
+                Arguments.of(
+                    "logging sleep in London",
+                    LocalDate.of(2023, 5, 8),
+                    LocalTime.of(23, 0), // 11:00 PM
+                    LocalTime.of(7, 0),  // 7:00 AM
+                    "Europe/London",
+                    480, // 8 hours = 480 minutes
+                    OffsetDateTime.of(2023, 5, 8, 23, 0, 0, 0, ZoneOffset.ofHours(1)),
+                    OffsetDateTime.of(2023, 5, 9, 7, 0, 0, 0, ZoneOffset.ofHours(1))
+                ),
+
+                // New Delhi, India (UTC+5:30)
+                Arguments.of(
+                    "logging sleep in New Delhi with half-hour offset",
+                    LocalDate.of(2023, 5, 8),
+                    LocalTime.of(23, 0), // 11:00 PM
+                    LocalTime.of(7, 0),  // 7:00 AM
+                    "Asia/Kolkata",
+                    480, // 8 hours = 480 minutes
+                    OffsetDateTime.of(2023, 5, 8, 23, 0, 0, 0, ZoneOffset.ofHoursMinutes(5, 30)),
+                    OffsetDateTime.of(2023, 5, 9, 7, 0, 0, 0, ZoneOffset.ofHoursMinutes(5, 30))
+                ),
+
+                // Auckland, New Zealand (UTC+12/13)
+                Arguments.of(
+                    "logging sleep in Auckland (extreme eastern timezone)",
+                    LocalDate.of(2023, 5, 8),
+                    LocalTime.of(22, 30), // 10:30 PM
+                    LocalTime.of(6, 30),  // 6:30 AM
+                    "Pacific/Auckland",
+                    480, // 8 hours = 480 minutes
+                    OffsetDateTime.of(2023, 5, 8, 22, 30, 0, 0, ZoneOffset.ofHours(12)),
+                    OffsetDateTime.of(2023, 5, 9, 6, 30, 0, 0, ZoneOffset.ofHours(12))
+                ),
+
+                // Honolulu, Hawaii (UTC-10)
+                Arguments.of(
+                    "logging sleep in Honolulu (extreme western timezone)",
+                    LocalDate.of(2023, 5, 8),
+                    LocalTime.of(21, 0), // 9:00 PM
+                    LocalTime.of(5, 0),  // 5:00 AM
+                    "Pacific/Honolulu",
+                    480, // 8 hours = 480 minutes
+                    OffsetDateTime.of(2023, 5, 8, 21, 0, 0, 0, ZoneOffset.ofHours(-10)),
+                    OffsetDateTime.of(2023, 5, 9, 5, 0, 0, 0, ZoneOffset.ofHours(-10))
+                )
+            )
+        }
+
+        @JvmStatic
+        fun daylightSavingTimeScenarios(): Stream<Arguments> {
+            return Stream.of(
+                // US Spring Forward (March 2023) - America/New_York
+                // On 2023-03-12, at 2am, clocks jump to 3am (losing an hour)
+                Arguments.of(
+                    "sleeping through spring forward (losing an hour)",
+                    LocalDate.of(2023, 3, 11), // night before DST change
+                    LocalTime.of(23, 0),      // 11:00 PM
+                    LocalTime.of(7, 0),       // 7:00 AM next day
+                    "America/New_York",
+                    420, // 8 hours in local time (but only 7 hours in actual elapsed time)
+                    OffsetDateTime.of(2023, 3, 11, 23, 0, 0, 0, ZoneOffset.ofHours(-5)), // EST
+                    OffsetDateTime.of(2023, 3, 12, 7, 0, 0, 0, ZoneOffset.ofHours(-4))   // EDT
+                ),
+
+                // US Fall Back (November 2023) - America/New_York
+                // On 2023-11-05, at 2am, clocks go back to 1am (gaining an hour)
+                Arguments.of(
+                    "sleeping through fall back (gaining an hour)",
+                    LocalDate.of(2023, 11, 4), // night before DST change
+                    LocalTime.of(23, 0),      // 11:00 PM
+                    LocalTime.of(7, 0),       // 7:00 AM next day
+                    "America/New_York",
+                    540, // 8 hours in local time (but actually 9 hours in elapsed time)
+                    OffsetDateTime.of(2023, 11, 4, 23, 0, 0, 0, ZoneOffset.ofHours(-4)), // EDT
+                    OffsetDateTime.of(2023, 11, 5, 7, 0, 0, 0, ZoneOffset.ofHours(-5))   // EST
+                ),
+
+                // Europe Spring Forward (March 2023) - Europe/London
+                // On 2023-03-26, at 1am, clocks jump to 2am (losing an hour)
+                Arguments.of(
+                    "sleeping through European DST spring forward",
+                    LocalDate.of(2023, 3, 25), // night before DST change
+                    LocalTime.of(23, 0),      // 11:00 PM
+                    LocalTime.of(7, 0),       // 7:00 AM next day
+                    "Europe/London",
+                    420, // 8 hours in local time (but only 7 hours in actual elapsed time)
+                    OffsetDateTime.of(2023, 3, 25, 23, 0, 0, 0, ZoneOffset.ofHours(0)),  // GMT
+                    OffsetDateTime.of(2023, 3, 26, 7, 0, 0, 0, ZoneOffset.ofHours(1))    // BST
+                ),
+
+                // Europe Fall Back (October 2023) - Europe/London
+                // On 2023-10-29, at 2am, clocks go back to 1am (gaining an hour)
+                Arguments.of(
+                    "sleeping through European DST fall back",
+                    LocalDate.of(2023, 10, 28), // night before DST change
+                    LocalTime.of(23, 0),       // 11:00 PM
+                    LocalTime.of(7, 0),        // 7:00 AM next day
+                    "Europe/London",
+                    540, // 8 hours in local time (but actually 9 hours in elapsed time)
+                    OffsetDateTime.of(2023, 10, 28, 23, 0, 0, 0, ZoneOffset.ofHours(1)), // BST
+                    OffsetDateTime.of(2023, 10, 29, 7, 0, 0, 0, ZoneOffset.ofHours(0))   // GMT
+                ),
+
+                // Australia DST starts (October) - Sydney
+                // On 2023-10-01, at 2am, clocks jump to 3am (losing an hour)
+                Arguments.of(
+                    "sleeping through Australian DST start",
+                    LocalDate.of(2023, 9, 30), // night before DST change
+                    LocalTime.of(23, 0),      // 11:00 PM
+                    LocalTime.of(7, 0),       // 7:00 AM next day
+                    "Australia/Sydney",
+                    420, // 8 hours in local time (but only 7 hours in actual elapsed time)
+                    OffsetDateTime.of(2023, 9, 30, 23, 0, 0, 0, ZoneOffset.ofHours(10)), // AEST
+                    OffsetDateTime.of(2023, 10, 1, 7, 0, 0, 0, ZoneOffset.ofHours(11))   // AEDT
+                ),
+
+                // Australia DST ends (April) - Sydney
+                // On 2023-04-02, at 3am, clocks go back to 2am (gaining an hour)
+                Arguments.of(
+                    "sleeping through Australian DST end",
+                    LocalDate.of(2023, 4, 1), // night before DST change
+                    LocalTime.of(23, 0),     // 11:00 PM
+                    LocalTime.of(7, 0),      // 7:00 AM next day
+                    "Australia/Sydney",
+                    540, // 8 hours in local time (but actually 9 hours in elapsed time)
+                    OffsetDateTime.of(2023, 4, 1, 23, 0, 0, 0, ZoneOffset.ofHours(11)), // AEDT
+                    OffsetDateTime.of(2023, 4, 2, 7, 0, 0, 0, ZoneOffset.ofHours(10))   // AEST
+                )
+            )
+        }
     }
 }
