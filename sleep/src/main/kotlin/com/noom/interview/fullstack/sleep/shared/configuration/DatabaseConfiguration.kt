@@ -1,9 +1,11 @@
 package com.noom.interview.fullstack.sleep.shared.configuration
 
+import com.noom.interview.fullstack.sleep.SleepApplication.Companion.UNIT_TEST_PROFILE
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.jdbc.DataSourceBuilder
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import org.springframework.context.annotation.Profile
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
 import java.sql.Connection
 import javax.sql.DataSource
@@ -31,7 +33,7 @@ class DatabaseConfiguration {
 
     @Bean
     fun dbConnection(dataSource: DataSource) : Connection
-            = dataSource.connection
+        = dataSource.connection
 
     @Bean
     fun namedParameterJdbcTemplate(dataSource: DataSource) : NamedParameterJdbcTemplate {
