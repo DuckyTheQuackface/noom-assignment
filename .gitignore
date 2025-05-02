@@ -4,7 +4,7 @@
 .gradle
 build
 
-db
+/db
 
 # Compiled class file
 *.class
