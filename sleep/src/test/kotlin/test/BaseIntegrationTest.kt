@@ -1,4 +1,4 @@
-package com.noom.interview.fullstack.sleep
+package test
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.junit.jupiter.api.extension.ExtendWith
@@ -28,13 +28,11 @@ abstract class BaseIntegrationTest {
     protected lateinit var objectMapper: ObjectMapper
 
     companion object {
-        @Container // todo 13 alpine
-        private val postgresContainer = PostgreSQLContainer<Nothing>("postgres:15-alpine").apply {
+        @Container
+        private val postgresContainer = PostgreSQLContainer<Nothing>("postgres:13-alpine").apply {
             withDatabaseName("sleep_tracker_test")
             withUsername("test")
             withPassword("test")
-            // Initialize with additional SQL if needed
-            // .withInitScript("init-test-db.sql")
         }
 
         @JvmStatic
@@ -43,9 +41,6 @@ abstract class BaseIntegrationTest {
             registry.add("spring.datasource.url") { postgresContainer.jdbcUrl }
             registry.add("spring.datasource.username") { postgresContainer.username }
             registry.add("spring.datasource.password") { postgresContainer.password }
-
-            // Enable Flyway for migrations
-            registry.add("spring.flyway.enabled") { "true" }
         }
     }
 }

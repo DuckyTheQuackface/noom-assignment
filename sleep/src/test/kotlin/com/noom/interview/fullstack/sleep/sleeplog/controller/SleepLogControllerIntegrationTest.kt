@@ -1,5 +1,6 @@
-package com.noom.interview.fullstack.sleep
+package com.noom.interview.fullstack.sleep.sleeplog.controller
 
+import test.BaseIntegrationTest
 import com.noom.interview.fullstack.sleep.sleeplog.entity.MorningFeeling
 import com.noom.interview.fullstack.sleep.user.entity.UserEntity
 import com.noom.interview.fullstack.sleep.sleeplog.repository.SleepLogRepository
@@ -13,6 +14,8 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
+import test.data.utils.SleepLogUtils
+import test.data.utils.UserUtils
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
@@ -29,12 +32,10 @@ class SleepLogControllerIntegrationTest : BaseIntegrationTest() {
 
     @BeforeEach
     fun setup() {
-        // Clean up any existing data
         sleepLogRepository.deleteAll()
         userRepository.deleteAll()
 
-        // Create a test user
-        testUserEntity = userRepository.save(TestDataUtils.createTestUser())
+        testUserEntity = userRepository.save(UserUtils.createTestUser())
     }
 
     @AfterEach
@@ -49,7 +50,7 @@ class SleepLogControllerIntegrationTest : BaseIntegrationTest() {
         val sleepDate = LocalDate.now().minusDays(1)
         val timeToBed = LocalTime.of(22, 30)
         val timeOutOfBed = LocalTime.of(6, 45)
-        val request = TestDataUtils.createSleepLogRequest(
+        val request = SleepLogUtils.createSleepLogRequest(
             sleepDate = sleepDate,
             timeToBed = timeToBed,
             timeOutOfBed = timeOutOfBed,
@@ -58,7 +59,7 @@ class SleepLogControllerIntegrationTest : BaseIntegrationTest() {
 
         // When & Then
         mockMvc.perform(
-            post("/api/v1/sleep-logs")
+            post("/api/v1/sleep-log")
                 .header("UserId", testUserEntity.id)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request))
@@ -76,11 +77,11 @@ class SleepLogControllerIntegrationTest : BaseIntegrationTest() {
     @Test
     fun `should get latest sleep log`() {
         // Given
-        val sleepLog1 = TestDataUtils.createSleepLog(
+        val sleepLog1 = SleepLogUtils.createSleepLog(
             userEntity = testUserEntity,
             sleepDate = LocalDate.now().minusDays(2)
         )
-        val sleepLog2 = TestDataUtils.createSleepLog(
+        val sleepLog2 = SleepLogUtils.createSleepLog(
             userEntity = testUserEntity,
             sleepDate = LocalDate.now().minusDays(1)
         )
@@ -90,7 +91,7 @@ class SleepLogControllerIntegrationTest : BaseIntegrationTest() {
 
         // When & Then
         mockMvc.perform(
-            get("/api/v1/sleep-logs/latest")
+            get("/api/v1/sleep-log/latest")
                 .header("UserId", testUserEntity.id)
         )
             .andExpect(status().isOk)
@@ -101,11 +102,11 @@ class SleepLogControllerIntegrationTest : BaseIntegrationTest() {
     @Test
     fun `should get sleep stats`() {
         // Given
-        TestDataUtils.setupMultipleSleepLogs(userRepository, sleepLogRepository, 30)
+        SleepLogUtils.setupMultipleSleepLogs(userRepository, sleepLogRepository, 30)
 
         // When & Then
         mockMvc.perform(
-            get("/api/v1/sleep-logs/stats")
+            get("/api/v1/sleep-log/stats")
                 .header("UserId", testUserEntity.id)
         )
             .andExpect(status().isOk)
@@ -124,11 +125,11 @@ class SleepLogControllerIntegrationTest : BaseIntegrationTest() {
     fun `should return 404 when user not found`() {
         // Given
         val nonExistentUserId = 999L
-        val request = TestDataUtils.createSleepLogRequest()
+        val request = SleepLogUtils.createSleepLogRequest()
 
         // When & Then
         mockMvc.perform(
-            post("/api/v1/sleep-logs")
+            post("/api/v1/sleep-log")
                 .header("UserId", nonExistentUserId)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request))
@@ -140,7 +141,7 @@ class SleepLogControllerIntegrationTest : BaseIntegrationTest() {
     fun `should return 404 when no sleep logs exist for latest`() {
         // When & Then
         mockMvc.perform(
-            get("/api/v1/sleep-logs/latest")
+            get("/api/v1/sleep-log/latest")
                 .header("UserId", testUserEntity.id)
         )
             .andExpect(status().isNotFound)
@@ -150,7 +151,7 @@ class SleepLogControllerIntegrationTest : BaseIntegrationTest() {
     fun `should return 404 when no sleep logs exist for stats`() {
         // When & Then
         mockMvc.perform(
-            get("/api/v1/sleep-logs/stats")
+            get("/api/v1/sleep-log/stats")
                 .header("UserId", testUserEntity.id)
         )
             .andExpect(status().isNotFound)
@@ -162,17 +163,17 @@ class SleepLogControllerIntegrationTest : BaseIntegrationTest() {
         val sleepDate = LocalDate.now().minusDays(1)
         val timeToBed = LocalTime.of(23, 0)
         val timeOutOfBed = LocalTime.of(7, 0)
-        val request = TestDataUtils.createSleepLogRequest(
+        val request = SleepLogUtils.createSleepLogRequest(
             sleepDate = sleepDate,
             timeToBed = timeToBed,
             timeOutOfBed = timeOutOfBed,
-            timeZoneId = "Europe/London", // Different from user's default timezone
+            timeZoneId = "Europe/London",
             feeling = MorningFeeling.GOOD
         )
 
         // When & Then
         mockMvc.perform(
-            post("/api/v1/sleep-logs")
+            post("/api/v1/sleep-log")
                 .header("UserId", testUserEntity.id)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request))
