@@ -1,0 +1,7 @@
+# curl --location 'http://localhost:8080/api/v1/sleep-log/latest'
+#--header 'UserId: 1'
+GET http://localhost:8080/api/v1/sleep-log/latest
+UserId: 1
+
+###
+

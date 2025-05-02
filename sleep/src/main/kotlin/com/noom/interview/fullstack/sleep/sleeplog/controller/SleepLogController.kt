@@ -3,9 +3,13 @@ package com.noom.interview.fullstack.sleep.sleeplog.controller
 import com.noom.interview.fullstack.sleep.shared.constants.X_USER_ID
 import com.noom.interview.fullstack.sleep.sleeplog.dto.request.CreateSleepLogRequest
 import com.noom.interview.fullstack.sleep.sleeplog.dto.response.SleepLogResponse
+import com.noom.interview.fullstack.sleep.sleeplog.dto.response.SleepStatsResponse
 import com.noom.interview.fullstack.sleep.sleeplog.usecase.CreateSleepLogUseCase
+import com.noom.interview.fullstack.sleep.sleeplog.usecase.GetLatestSleepLogUseCase
+import com.noom.interview.fullstack.sleep.sleeplog.usecase.GetSleepStatsUseCase
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
+import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestHeader
@@ -15,7 +19,9 @@ import org.springframework.web.bind.annotation.RestController
 @RestController
 @RequestMapping("/api/v1/sleep-log")
 class SleepLogController(
-    private val createSleepLogUseCase: CreateSleepLogUseCase
+    private val createSleepLogUseCase: CreateSleepLogUseCase,
+    private val getLatestSleepLogUseCase: GetLatestSleepLogUseCase,
+    private val getSleepStatsUseCase: GetSleepStatsUseCase,
 ) {
     @PostMapping
     fun createSleepLog(
@@ -26,5 +32,21 @@ class SleepLogController(
         return ResponseEntity
             .status(HttpStatus.CREATED)
             .body(createdSleepLog)
+    }
+
+    @GetMapping("/latest")
+    fun getLatestSleepLog(
+        @RequestHeader(X_USER_ID) userId: Long,
+    ): ResponseEntity<SleepLogResponse> {
+        val latestSleepLog = getLatestSleepLogUseCase.getLatestSleepLog(userId)
+        return ResponseEntity.ok(latestSleepLog)
+    }
+
+    @GetMapping("/stats")
+    fun getSleepStats(
+        @RequestHeader(X_USER_ID) userId: Long,
+    ): ResponseEntity<SleepStatsResponse> {
+        val sleepStats = getSleepStatsUseCase.getSleepStats(userId)
+        return ResponseEntity.ok(sleepStats)
     }
 }
