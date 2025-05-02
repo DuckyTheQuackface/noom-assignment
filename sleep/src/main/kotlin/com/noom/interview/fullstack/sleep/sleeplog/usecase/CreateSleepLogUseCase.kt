@@ -14,6 +14,7 @@ import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.ZonedDateTime
 import java.time.Duration
+import java.time.LocalDate
 
 @Service
 class CreateSleepLogUseCase(
@@ -75,24 +76,46 @@ class CreateSleepLogUseCase(
         } else {
             request.sleepDate.plusDays(1)
         }
-        val bedDateTime = ZonedDateTime.of(bedDate, request.timeToBed, zoneId)
 
-        val wakeDateTime = if (
+        val wakeDate = if (
             request.timeOutOfBed.isBefore(request.timeToBed) &&
             request.timeToBed.isAfter(LocalTime.NOON) &&
             request.timeToBed != LocalTime.MIDNIGHT
         ) {
-            // Standard case: went to bed in evening, woke up in morning
-            ZonedDateTime.of(bedDate.plusDays(1), request.timeOutOfBed, zoneId)
+            bedDate.plusDays(1)
         } else {
-            // Either:
-            // - wake time is later than bed time (same day)
-            // - or bed time is already after midnight, so wake time is same day even if earlier
-            ZonedDateTime.of(bedDate, request.timeOutOfBed, zoneId)
+            bedDate
         }
 
-        return bedDateTime.toOffsetDateTime() to wakeDateTime.toOffsetDateTime()
+        val bedZonedDateTime = resolveZonedDateTimeWithDST(bedDate, request.timeToBed, zoneId, "bed")
+        val wakeZonedDateTime = resolveZonedDateTimeWithDST(wakeDate, request.timeOutOfBed, zoneId, "wake")
+
+        return bedZonedDateTime.toOffsetDateTime() to wakeZonedDateTime.toOffsetDateTime()
     }
+
+    private fun resolveZonedDateTimeWithDST(
+        date: LocalDate,
+        time: LocalTime,
+        zoneId: ZoneId,
+        label: String
+    ): ZonedDateTime {
+        val localDateTime = date.atTime(time)
+        val zoneRules = zoneId.rules
+        val validOffsets = zoneRules.getValidOffsets(localDateTime)
+
+        return when {
+            validOffsets.isEmpty() -> {
+                throw InvalidSleepDuration("The $label time $localDateTime does not exist in time zone $zoneId due to a DST transition.")
+            }
+            validOffsets.size == 1 -> {
+                ZonedDateTime.ofStrict(localDateTime, validOffsets[0], zoneId)
+            }
+            else -> {
+                ZonedDateTime.ofStrict(localDateTime, validOffsets.first(), zoneId)
+            }
+        }
+    }
+
 
     private fun calculateSleepDurationFromUtcTimes(
         bedTime: OffsetDateTime,
