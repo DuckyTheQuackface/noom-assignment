@@ -4,6 +4,7 @@ import com.noom.interview.fullstack.sleep.sleeplog.dto.request.CreateSleepLogReq
 import com.noom.interview.fullstack.sleep.sleeplog.dto.response.SleepLogResponse
 import com.noom.interview.fullstack.sleep.sleeplog.entity.SleepLogEntity
 import com.noom.interview.fullstack.sleep.sleeplog.exception.InvalidSleepDuration
+import com.noom.interview.fullstack.sleep.sleeplog.exception.TimeDoesNotExist
 import com.noom.interview.fullstack.sleep.sleeplog.mapper.SleepLogMapper
 import com.noom.interview.fullstack.sleep.sleeplog.repository.SleepLogRepository
 import com.noom.interview.fullstack.sleep.user.UserService
@@ -87,8 +88,8 @@ class CreateSleepLogUseCase(
             bedDate
         }
 
-        val bedZonedDateTime = resolveZonedDateTimeWithDST(bedDate, request.timeToBed, zoneId, "bed")
-        val wakeZonedDateTime = resolveZonedDateTimeWithDST(wakeDate, request.timeOutOfBed, zoneId, "wake")
+        val bedZonedDateTime = resolveZonedDateTimeWithDST(bedDate, request.timeToBed, zoneId)
+        val wakeZonedDateTime = resolveZonedDateTimeWithDST(wakeDate, request.timeOutOfBed, zoneId)
 
         return bedZonedDateTime.toOffsetDateTime() to wakeZonedDateTime.toOffsetDateTime()
     }
@@ -96,8 +97,7 @@ class CreateSleepLogUseCase(
     private fun resolveZonedDateTimeWithDST(
         date: LocalDate,
         time: LocalTime,
-        zoneId: ZoneId,
-        label: String
+        zoneId: ZoneId
     ): ZonedDateTime {
         val localDateTime = date.atTime(time)
         val zoneRules = zoneId.rules
@@ -105,7 +105,7 @@ class CreateSleepLogUseCase(
 
         return when {
             validOffsets.isEmpty() -> {
-                throw InvalidSleepDuration("The $label time $localDateTime does not exist in time zone $zoneId due to a DST transition.")
+                throw TimeDoesNotExist(time)
             }
             validOffsets.size == 1 -> {
                 ZonedDateTime.ofStrict(localDateTime, validOffsets[0], zoneId)

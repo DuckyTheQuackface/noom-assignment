@@ -3,6 +3,7 @@ package com.noom.interview.fullstack.sleep.sleeplog.usecase
 import com.noom.interview.fullstack.sleep.sleeplog.dto.request.CreateSleepLogRequest
 import com.noom.interview.fullstack.sleep.sleeplog.entity.MorningFeeling
 import com.noom.interview.fullstack.sleep.sleeplog.entity.SleepLogEntity
+import com.noom.interview.fullstack.sleep.sleeplog.exception.TimeDoesNotExist
 import com.noom.interview.fullstack.sleep.sleeplog.mapper.SleepLogMapper
 import com.noom.interview.fullstack.sleep.sleeplog.repository.SleepLogRepository
 import com.noom.interview.fullstack.sleep.user.UserService
@@ -192,20 +193,23 @@ class CreateSleepLogUseCaseTest {
             timeZoneId = timeZoneId
         )
 
-        // When
-        val result = createSleepLogUseCase.createSleepLog(userId, request)
+        // When - Then
+        kotlin.runCatching {
+            createSleepLogUseCase.createSleepLog(userId, request)
+        }.onFailure {
+            assertTrue(it is TimeDoesNotExist)
+        }.onSuccess {
+            verify(sleepLogRepository).save(sleepLogCaptor.capture())
+            val savedEntity = sleepLogCaptor.value
 
-        // Then
-        verify(sleepLogRepository).save(sleepLogCaptor.capture())
-        val savedEntity = sleepLogCaptor.value
-
-        assertEquals(sleepDate, savedEntity.sleepDate)
-        assertEquals(timeToBed, savedEntity.localTimeToBed)
-        assertEquals(timeOutOfBed, savedEntity.localTimeOutOfBed)
-        assertEquals(expectedTotalMinutes, savedEntity.totalTimeInBedMinutes)
-        assertEquals(timeZoneId, savedEntity.timeZoneId)
-        assertEquals(expectedUtcBedTime, savedEntity.utcTimeToBed)
-        assertEquals(expectedUtcWakeTime, savedEntity.utcTimeOutOfBed)
+            assertEquals(sleepDate, savedEntity.sleepDate)
+            assertEquals(timeToBed, savedEntity.localTimeToBed)
+            assertEquals(timeOutOfBed, savedEntity.localTimeOutOfBed)
+            assertEquals(expectedTotalMinutes, savedEntity.totalTimeInBedMinutes)
+            assertEquals(timeZoneId, savedEntity.timeZoneId)
+            assertEquals(expectedUtcBedTime, savedEntity.utcTimeToBed)
+            assertEquals(expectedUtcWakeTime, savedEntity.utcTimeOutOfBed)
+        }
     }
 
     @Test
@@ -553,16 +557,16 @@ class CreateSleepLogUseCaseTest {
             return Stream.of(
                 // US Spring Forward (March 2023) - Going to bed right at 2:00 AM transition (non-existent hour)
                 // When clock jumps from 1:59 AM to 3:00 AM
-//                Arguments.of(
-//                    "going to bed during spring forward (at non-existent hour)",
-//                    LocalDate.of(2023, 3, 11), // Night before transition
-//                    LocalTime.of(2, 30), // 1:30 AM (before transition)
-//                    LocalTime.of(9, 30), // 9:30 AM
-//                    "America/New_York",
-//                    480, // 8 hours in local time
-//                    OffsetDateTime.of(2023, 3, 12, 1, 30, 0, 0, ZoneOffset.ofHours(-5)), // EST
-//                    OffsetDateTime.of(2023, 3, 12, 9, 30, 0, 0, ZoneOffset.ofHours(-4))  // EDT
-//                ),
+                Arguments.of(
+                    "going to bed during spring forward (at non-existent hour)",
+                    LocalDate.of(2023, 3, 11), // Night before transition
+                    LocalTime.of(2, 30), // 1:30 AM (before transition)
+                    LocalTime.of(9, 30), // 9:30 AM
+                    "America/New_York",
+                    480, // 8 hours in local time
+                    OffsetDateTime.of(2023, 3, 12, 1, 30, 0, 0, ZoneOffset.ofHours(-5)), // EST
+                    OffsetDateTime.of(2023, 3, 12, 9, 30, 0, 0, ZoneOffset.ofHours(-4))  // EDT
+                ),
 
                 // US Spring Forward - Waking up after transition
                 Arguments.of(
@@ -600,18 +604,18 @@ class CreateSleepLogUseCaseTest {
                     OffsetDateTime.of(2023, 11, 4, 21, 0, 0, 0, ZoneOffset.ofHours(-4)), // EDT
                     OffsetDateTime.of(2023, 11, 5, 1, 30, 0, 0, ZoneOffset.ofHours(-4))  // EST (first 1:30 AM)
                 ),
-//
-//                // European DST - "Skipped hour" scenario (going to sleep before transition, waking during "skipped" hour)
-//                Arguments.of(
-//                    "waking up at skipped hour during European DST change",
-//                    LocalDate.of(2025, 3, 29),
-//                    LocalTime.of(23, 0), // 11:00 PM
-//                    LocalTime.of(2, 30), // 2:30 AM (skipped hour - clocks jumped from 1:00 to 3:00)
-//                    "Europe/Berlin",
-//                    210, // 3.5 hours (accounting for lost hour)
-//                    OffsetDateTime.of(1999, 3, 25, 23, 0, 0, 0, ZoneOffset.ofHours(0)), // GMT
-//                    OffsetDateTime.of(1999, 3, 26, 2, 30, 0, 0, ZoneOffset.ofHours(1))  // BST
-//                ),
+
+                // European DST - "Skipped hour" scenario (going to sleep before transition, waking during "skipped" hour)
+                Arguments.of(
+                    "waking up at skipped hour during European DST change",
+                    LocalDate.of(2025, 3, 29),
+                    LocalTime.of(23, 0), // 11:00 PM
+                    LocalTime.of(2, 30), // 2:30 AM (skipped hour - clocks jumped from 1:00 to 3:00)
+                    "Europe/Berlin",
+                    210, // 3.5 hours (accounting for lost hour)
+                    OffsetDateTime.of(1999, 3, 25, 23, 0, 0, 0, ZoneOffset.ofHours(0)), // GMT
+                    OffsetDateTime.of(1999, 3, 26, 2, 30, 0, 0, ZoneOffset.ofHours(1))  // BST
+                ),
 
                 // European DST Fall Back - Very short sleep that spans exactly the transition
                 Arguments.of(
